@@ -15,6 +15,19 @@ export const LOGIN_HERO_IMAGE = '/src/assets/images/dakar_login_hero_17956017406
 const now = Date.now();
 const minutesAgo = (mins: number) => new Date(now - mins * 60_000).toISOString();
 const hoursAgo = (hrs: number) => new Date(now - hrs * 3_600_000).toISOString();
+const todaySafeMinutesAgo = (mins: number) => {
+  const startOfToday = new Date(now);
+  startOfToday.setHours(0, 5, 0, 0);
+  return new Date(Math.max(startOfToday.getTime(), now - mins * 60_000)).toISOString();
+};
+const daysAgoAt = (days: number, hourOfDay: number) => {
+  const d = new Date(now);
+  d.setDate(d.getDate() - days);
+  const wholeHours = Math.floor(hourOfDay);
+  const mins = Math.round((hourOfDay - wholeHours) * 60);
+  d.setHours(wholeHours, mins, 0, 0);
+  return d.toISOString();
+};
 
 export const DEMO_COURIER_PROFILE: CourierProfile = {
   uid: 'demo-courier-dakar-01',
@@ -37,9 +50,60 @@ export const DEMO_COURIER_PROFILE: CourierProfile = {
 };
 
 export function buildDemoMissions(courierId: string): DeliveryMission[] {
+  const prefix = courierId.slice(0, 8);
+  const makePastDelivered = (
+    seq: string,
+    orderNumber: string,
+    customerName: string,
+    deliveryZone: string,
+    deliveryAddress: string,
+    pickupName: string,
+    days: number,
+    hourOffset: number,
+    codAmount: number,
+    estimatedFee: number
+  ): DeliveryMission => ({
+    missionId: `msn_${prefix}_${seq}`,
+    orderNumber,
+    courierId,
+    dataSource: 'local_demo',
+    customerName,
+    customerPhone: '+221 77 410 22 00',
+    deliveryAddress,
+    deliveryZone,
+    pickupName,
+    pickupAddress: 'Point E, Dakar',
+    itemsSummary: [{ name: 'Colis JikJikoox Teranga', quantity: 2, unit: 'articles' }],
+    itemCount: 2,
+    paymentMode: codAmount > 0 ? 'cod' : 'prepaid',
+    codAmount,
+    estimatedFee,
+    instructions: 'Livraison standard Dakar.',
+    status: 'DELIVERED',
+    recipientName: customerName,
+    proofCode: `${2100 + Number(seq) * 73}`,
+    proofNote: 'Colis remis en bon état.',
+    events: [
+      {
+        status: 'ASSIGNED',
+        label: 'Mission affectée',
+        timestampIso: daysAgoAt(days, 9.5 + hourOffset),
+        actor: 'system',
+      },
+      {
+        status: 'DELIVERED',
+        label: 'Livraison confirmée avec preuve',
+        timestampIso: daysAgoAt(days, 11 + hourOffset),
+        actor: 'courier',
+      },
+    ],
+    createdAtIso: daysAgoAt(days, 9.5 + hourOffset),
+    updatedAtIso: daysAgoAt(days, 11 + hourOffset),
+  });
+
   return [
     {
-      missionId: `msn_${courierId.slice(0, 8)}_01`,
+      missionId: `msn_${prefix}_01`,
       orderNumber: 'JKX-2026-8412',
       courierId,
       dataSource: 'local_demo',
@@ -92,7 +156,7 @@ export function buildDemoMissions(courierId: string): DeliveryMission[] {
       updatedAtIso: minutesAgo(14),
     },
     {
-      missionId: `msn_${courierId.slice(0, 8)}_02`,
+      missionId: `msn_${prefix}_02`,
       orderNumber: 'JKX-2026-8419',
       courierId,
       dataSource: 'local_demo',
@@ -127,7 +191,7 @@ export function buildDemoMissions(courierId: string): DeliveryMission[] {
       updatedAtIso: minutesAgo(9),
     },
     {
-      missionId: `msn_${courierId.slice(0, 8)}_03`,
+      missionId: `msn_${prefix}_03`,
       orderNumber: 'JKX-2026-8415',
       courierId,
       dataSource: 'local_demo',
@@ -167,7 +231,7 @@ export function buildDemoMissions(courierId: string): DeliveryMission[] {
       updatedAtIso: minutesAgo(31),
     },
     {
-      missionId: `msn_${courierId.slice(0, 8)}_04`,
+      missionId: `msn_${prefix}_04`,
       orderNumber: 'JKX-2026-8394',
       courierId,
       dataSource: 'local_demo',
@@ -196,45 +260,45 @@ export function buildDemoMissions(courierId: string): DeliveryMission[] {
         {
           status: 'ASSIGNED',
           label: 'Mission affectée',
-          timestampIso: hoursAgo(4),
+          timestampIso: todaySafeMinutesAgo(150),
           actor: 'system',
         },
         {
           status: 'ACCEPTED',
           label: 'Mission acceptée',
-          timestampIso: hoursAgo(3.8),
+          timestampIso: todaySafeMinutesAgo(138),
           actor: 'courier',
         },
         {
           status: 'PICKED_UP',
           label: 'Colis récupéré',
-          timestampIso: hoursAgo(3.3),
+          timestampIso: todaySafeMinutesAgo(118),
           actor: 'courier',
         },
         {
           status: 'IN_TRANSIT',
           label: 'En route vers Fann Résidence',
-          timestampIso: hoursAgo(3.1),
+          timestampIso: todaySafeMinutesAgo(105),
           actor: 'courier',
         },
         {
           status: 'ARRIVED',
           label: 'Arrivé chez le client',
-          timestampIso: hoursAgo(2.8),
+          timestampIso: todaySafeMinutesAgo(92),
           actor: 'courier',
         },
         {
           status: 'DELIVERED',
           label: 'Livraison confirmée avec code 4829',
-          timestampIso: hoursAgo(2.7),
+          timestampIso: todaySafeMinutesAgo(86),
           actor: 'courier',
         },
       ],
-      createdAtIso: hoursAgo(4),
-      updatedAtIso: hoursAgo(2.7),
+      createdAtIso: todaySafeMinutesAgo(150),
+      updatedAtIso: todaySafeMinutesAgo(86),
     },
     {
-      missionId: `msn_${courierId.slice(0, 8)}_05`,
+      missionId: `msn_${prefix}_05`,
       orderNumber: 'JKX-2026-8388',
       courierId,
       dataSource: 'local_demo',
@@ -261,27 +325,27 @@ export function buildDemoMissions(courierId: string): DeliveryMission[] {
         {
           status: 'ASSIGNED',
           label: 'Mission affectée',
-          timestampIso: hoursAgo(6.5),
+          timestampIso: todaySafeMinutesAgo(210),
           actor: 'system',
         },
         {
           status: 'PICKED_UP',
           label: 'Colis récupéré',
-          timestampIso: hoursAgo(5.8),
+          timestampIso: todaySafeMinutesAgo(180),
           actor: 'courier',
         },
         {
           status: 'DELIVERED',
           label: 'Livraison confirmée',
-          timestampIso: hoursAgo(5.1),
+          timestampIso: todaySafeMinutesAgo(155),
           actor: 'courier',
         },
       ],
-      createdAtIso: hoursAgo(6.5),
-      updatedAtIso: hoursAgo(5.1),
+      createdAtIso: todaySafeMinutesAgo(210),
+      updatedAtIso: todaySafeMinutesAgo(155),
     },
     {
-      missionId: `msn_${courierId.slice(0, 8)}_06`,
+      missionId: `msn_${prefix}_06`,
       orderNumber: 'JKX-2026-8361',
       courierId,
       dataSource: 'local_demo',
@@ -305,31 +369,84 @@ export function buildDemoMissions(courierId: string): DeliveryMission[] {
         {
           status: 'ASSIGNED',
           label: 'Mission affectée',
-          timestampIso: hoursAgo(26),
+          timestampIso: daysAgoAt(1, 14),
           actor: 'system',
         },
         {
           status: 'ARRIVED',
           label: 'Arrivé à Ouakam Cité Avion',
-          timestampIso: hoursAgo(24.5),
+          timestampIso: daysAgoAt(1, 15),
           actor: 'courier',
         },
         {
           status: 'FAILED',
           label: 'Échec : Client injoignable après 3 appels',
-          timestampIso: hoursAgo(24.2),
+          timestampIso: daysAgoAt(1, 15.5),
           actor: 'courier',
         },
         {
           status: 'RETURN_REQUIRED',
           label: 'Retour au point relais Liberté 6 validé',
-          timestampIso: hoursAgo(23.8),
+          timestampIso: daysAgoAt(1, 16),
           actor: 'courier',
         },
       ],
-      createdAtIso: hoursAgo(26),
-      updatedAtIso: hoursAgo(23.8),
+      createdAtIso: daysAgoAt(1, 14),
+      updatedAtIso: daysAgoAt(1, 16),
     },
+    // Historique récent de la semaine (J-1 à J-6) pour la courbe hebdomadaire démo
+    makePastDelivered('07', 'JKX-2026-8358', 'Ndeye Khady Diallo', 'Dakar Plateau', 'Avenue Léopold Sédar Senghor', 'Maison Teranga Bio', 1, 2, 11000, 2000),
+    makePastDelivered('08', 'JKX-2026-8352', 'Mamadou Lamine Sow', 'Almadies & Ngor', 'Zone 12, Almadies', 'Coopérative Karité Kédougou', 1, 4, 0, 2500),
+    makePastDelivered('09', 'JKX-2026-8347', 'Sokhna Amy Kane', 'Mermoz & Sacré-Cœur', 'Mermoz Pyrotechnie, Villa 31', 'Atelier Café Touba Premium', 1, 5, 8500, 1500),
+    makePastDelivered('10', 'JKX-2026-8331', 'Abdoulaye Mbaye', 'Point E & Fann', 'Avenue Cheikh Anta Diop, Point E', 'Épices & Saveurs du Sine', 2, 1, 15000, 1500),
+    makePastDelivered('11', 'JKX-2026-8324', 'Ramatoulaye Ndiaye', 'Liberté & Sicap', 'Sicap Liberté 4, Villa 5021', 'Rizières de la Vallée', 2, 3, 0, 1500),
+    makePastDelivered('12', 'JKX-2026-8319', 'Pape Moussa Cissé', 'Dakar Plateau', 'Rue Carnot, Immeuble Sokhna', 'Maison Teranga Bio', 2, 5, 9000, 2000),
+    makePastDelivered('13', 'JKX-2026-8304', 'Khadija Touré', 'Ouakam & Yoff', 'Yoff Virage, Résidence Océan', 'Ferme Niayes Express', 3, 2, 13500, 2000),
+    makePastDelivered('14', 'JKX-2026-8298', 'Modou Fall', 'Parcelles Assainies', 'Unité 11, Villa 88', 'Atelier Café Touba Premium', 3, 4, 0, 1500),
+    makePastDelivered('15', 'JKX-2026-8275', 'Binta Diagne', 'Mermoz & Sacré-Cœur', 'Sacré-Cœur 2, Rue 18', 'Maison Teranga Bio', 4, 1, 7500, 1500),
+    makePastDelivered('16', 'JKX-2026-8271', 'Serigne Saliou Niang', 'Almadies & Ngor', 'Ngor Extension, Lot 19', 'Coopérative Karité Kédougou', 4, 3, 19000, 2500),
+    makePastDelivered('17', 'JKX-2026-8268', 'Aminata Faye', 'Point E & Fann', 'Rue de Saint-Louis, Point E', 'Rizières de la Vallée', 4, 5, 0, 1500),
+    {
+      missionId: `msn_${prefix}_18`,
+      orderNumber: 'JKX-2026-8262',
+      courierId,
+      dataSource: 'local_demo',
+      customerName: 'Cheikh Ahmadou Bamba Lo',
+      customerPhone: '+221 77 339 10 82',
+      deliveryAddress: 'Grand Yoff, Cité Millionnaire',
+      deliveryZone: 'Grand Yoff',
+      pickupName: 'Épices & Saveurs du Sine',
+      pickupAddress: 'HLM 5, Dakar',
+      itemsSummary: [{ name: 'Assortiment épices locales', quantity: 2, unit: 'coffrets' }],
+      itemCount: 2,
+      paymentMode: 'cod',
+      codAmount: 6500,
+      estimatedFee: 1500,
+      instructions: 'Téléphoner avant passage.',
+      status: 'RETURNED',
+      failureReason: 'Adresse incomplète — client absent',
+      events: [
+        {
+          status: 'ASSIGNED',
+          label: 'Mission affectée',
+          timestampIso: daysAgoAt(4, 15),
+          actor: 'system',
+        },
+        {
+          status: 'RETURNED',
+          label: 'Colis retourné au point relais',
+          timestampIso: daysAgoAt(4, 17),
+          actor: 'courier',
+        },
+      ],
+      createdAtIso: daysAgoAt(4, 15),
+      updatedAtIso: daysAgoAt(4, 17),
+    },
+    makePastDelivered('19', 'JKX-2026-8240', 'Yacine Seck', 'Dakar Plateau', 'Boulevard de la République', 'Maison Teranga Bio', 5, 2, 16000, 2000),
+    makePastDelivered('20', 'JKX-2026-8235', 'Babacar Ndiaye', 'Liberté & Sicap', 'Liberté 6, près du rond-point', 'Atelier Café Touba Premium', 5, 4, 0, 1500),
+    makePastDelivered('21', 'JKX-2026-8210', 'Mame Diarra Bousso', 'Almadies & Ngor', 'Route de Ngor, Villa 7', 'Coopérative Karité Kédougou', 6, 2, 22000, 2500),
+    makePastDelivered('22', 'JKX-2026-8204', 'Ibrahima Diouf', 'Mermoz & Sacré-Cœur', 'Mermoz VDN, Immeuble Horizon', 'Ferme Niayes Express', 6, 4, 0, 1500),
+    makePastDelivered('23', 'JKX-2026-8201', 'Astou Camara', 'Point E & Fann', 'Fann Hock, Rue 5', 'Rizières de la Vallée', 6, 5, 10500, 1500),
   ];
 }
 

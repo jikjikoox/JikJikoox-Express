@@ -10,6 +10,7 @@ import {
   Truck,
 } from 'lucide-react';
 import { BrandAccentBar } from '../components/BrandLogo';
+import { DashboardChart } from '../components/DashboardChart';
 import { MissionCard } from '../components/MissionCard';
 import { useCourierApp } from '../context/CourierAppContext';
 import {
@@ -37,14 +38,30 @@ export function DashboardPage({ onSelectMission, onNavigateTab }: DashboardPageP
   } = useCourierApp();
 
   const stats = useMemo(() => {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const todayMs = startOfToday.getTime();
+
+    const isFromToday = (iso: string) => {
+      const parsed = new Date(iso).getTime();
+      return !Number.isNaN(parsed) && parsed >= todayMs;
+    };
+
     const active = missions.filter((m) => MISSION_STATUS_META[m.status].isActive);
     const awaitingAccept = missions.filter((m) => m.status === 'ASSIGNED');
-    const delivered = missions.filter((m) => m.status === 'DELIVERED');
-    const estimatedEarnings = delivered.reduce((sum, m) => sum + m.estimatedFee, 0);
+    const deliveredToday = missions.filter(
+      (m) => m.status === 'DELIVERED' && isFromToday(m.updatedAtIso || m.createdAtIso)
+    );
+    const todayMissions = missions.filter(
+      (m) =>
+        MISSION_STATUS_META[m.status].isActive ||
+        isFromToday(m.updatedAtIso || m.createdAtIso)
+    );
+    const estimatedEarnings = deliveredToday.reduce((sum, m) => sum + m.estimatedFee, 0);
     const pendingCod = active
       .filter((m) => m.paymentMode === 'cod')
       .reduce((sum, m) => sum + m.codAmount, 0);
-    const collectedCod = delivered
+    const collectedCod = deliveredToday
       .filter((m) => m.paymentMode === 'cod')
       .reduce((sum, m) => sum + m.codAmount, 0);
 
@@ -57,10 +74,10 @@ export function DashboardPage({ onSelectMission, onNavigateTab }: DashboardPageP
       null;
 
     return {
-      totalToday: missions.length,
+      totalToday: todayMissions.length,
       activeCount: active.length,
       awaitingAcceptCount: awaitingAccept.length,
-      deliveredCount: delivered.length,
+      deliveredCount: deliveredToday.length,
       estimatedEarnings,
       pendingCod,
       collectedCod,
@@ -129,6 +146,9 @@ export function DashboardPage({ onSelectMission, onNavigateTab }: DashboardPageP
         </div>
       </section>
 
+      {/* Weekly Missions Accomplished & Success Rate Chart (Recharts) */}
+      <DashboardChart missions={missions} />
+
       {/* Firebase Active Courier Empty State — never writes fake missions to Firestore */}
       {mode === 'firebase' && !loadingData && missions.length === 0 && (
         <section className="bg-[#FEF6E4] border border-[#F4A61D]/40 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -177,7 +197,7 @@ export function DashboardPage({ onSelectMission, onNavigateTab }: DashboardPageP
         </div>
 
         <div className="bg-white border border-[#E5E2D9] rounded-2xl p-4 sm:p-5">
-          <p className="text-xs font-medium text-[#5A5851]">Terminées</p>
+          <p className="text-xs font-medium text-[#5A5851]">Terminées (auj.)</p>
           <p className="mt-2 font-mono text-2xl sm:text-3xl font-bold text-[#141413] tabular-nums">
             {stats.deliveredCount}
           </p>
@@ -185,7 +205,7 @@ export function DashboardPage({ onSelectMission, onNavigateTab }: DashboardPageP
         </div>
 
         <div className="bg-white border border-[#E5E2D9] rounded-2xl p-4 sm:p-5">
-          <p className="text-xs font-medium text-[#5A5851]">Rémunération estimée</p>
+          <p className="text-xs font-medium text-[#5A5851]">Rémunération du jour</p>
           <p className="mt-2 font-mono text-xl sm:text-2xl font-bold text-[#141413] tabular-nums">
             {formatFcfa(stats.estimatedEarnings)}
           </p>

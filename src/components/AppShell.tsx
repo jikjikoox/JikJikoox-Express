@@ -60,9 +60,10 @@ export function AppShell({
           <button
             type="button"
             onClick={() => onSelectTab('dashboard')}
-            className="flex items-center cursor-pointer text-left"
+            aria-label="Retour à l'accueil JikJikoox Express"
+            className="flex items-center cursor-pointer text-left rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0E6E2D]"
           >
-            <BrandLogo size="sm" showWordmark />
+            <BrandLogo size="sm" showWordmark subtitle="Espace livreur" />
           </button>
         </div>
 
@@ -136,58 +137,128 @@ export function AppShell({
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Mobile Compact Top App Bar (52px height to stay well under 15% mobile sticky cap) */}
-        <header className="lg:hidden sticky top-0 z-30 h-[52px] bg-white/95 backdrop-blur-md border-b border-[#E5E2D9] px-4 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5 min-w-0">
-            {showBack && onBack ? (
+        {/* Mobile Compact Top App Bar (54px total height to stay well under 15% mobile sticky cap) */}
+        <header className="lg:hidden sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-[#E5E2D9]">
+          <BrandAccentBar className="h-[2px]" />
+          <div className="h-[52px] px-4 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 min-w-0">
+              {showBack && onBack ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={onBack}
+                    aria-label="Retour"
+                    className="-ml-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl text-[#141413] hover:bg-[#F7F6F2] cursor-pointer shrink-0"
+                  >
+                    <ArrowLeft className="w-5 h-5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onSelectTab('dashboard')}
+                    aria-label="Accueil JikJikoox Express"
+                    className="flex items-center cursor-pointer shrink-0 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0E6E2D]"
+                  >
+                    <BrandLogo size="sm" />
+                  </button>
+                  <span className="font-display font-bold text-base text-[#141413] truncate">
+                    {pageTitle}
+                  </span>
+                </>
+              ) : activeTab === 'dashboard' ? (
+                <button
+                  type="button"
+                  onClick={() => onSelectTab('dashboard')}
+                  aria-label="Accueil JikJikoox Express"
+                  className="flex items-center cursor-pointer text-left min-w-0 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0E6E2D]"
+                >
+                  <BrandLogo size="sm" showWordmark />
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onSelectTab('dashboard')}
+                    aria-label="Retour à l'accueil JikJikoox Express"
+                    className="flex items-center cursor-pointer shrink-0 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0E6E2D]"
+                  >
+                    <BrandLogo size="sm" />
+                  </button>
+                  <span aria-hidden="true" className="w-px h-4 bg-[#E5E2D9] shrink-0" />
+                  <span className="font-display font-bold text-base text-[#141413] truncate">
+                    {pageTitle}
+                  </span>
+                </>
+              )}
+            </div>
+
+            {profile && (
               <button
                 type="button"
-                onClick={onBack}
-                aria-label="Retour"
-                className="-ml-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl text-[#141413] hover:bg-[#F7F6F2] cursor-pointer"
+                onClick={() => void toggleAvailability()}
+                className={`min-h-[36px] px-3 rounded-lg text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+                  profile.isAvailable
+                    ? 'bg-[#ECF7EE] text-[#0E6E2D]'
+                    : 'bg-[#EFECE4] text-[#5A5851]'
+                }`}
               >
-                <ArrowLeft className="w-5 h-5" />
+                {profile.isAvailable ? 'Disponible' : 'Indisponible'}
               </button>
-            ) : (
-              <BrandLogo size="sm" />
             )}
-            <span className="font-display font-bold text-base text-[#141413] truncate">
-              {pageTitle}
-            </span>
           </div>
-
-          {profile && (
-            <button
-              type="button"
-              onClick={() => void toggleAvailability()}
-              className={`min-h-[36px] px-3 rounded-lg text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
-                profile.isAvailable
-                  ? 'bg-[#ECF7EE] text-[#0E6E2D]'
-                  : 'bg-[#EFECE4] text-[#5A5851]'
-              }`}
-            >
-              {profile.isAvailable ? 'Disponible' : 'Indisponible'}
-            </button>
-          )}
         </header>
 
-        {/* Desktop Subtle Top Context Row */}
-        {showBack && onBack && (
-          <div className="hidden lg:flex items-center px-8 pt-6">
-            <button
-              type="button"
-              onClick={onBack}
-              className="inline-flex items-center gap-2 text-sm font-semibold text-[#5A5851] hover:text-[#141413] transition-colors cursor-pointer"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Retour aux missions</span>
-            </button>
+        {/* Desktop Sticky Top Header (aligned with sidebar BrandAccentBar & 64px brand row) */}
+        <header className="hidden lg:flex flex-col sticky top-0 z-20 bg-white/95 backdrop-blur-md border-b border-[#E5E2D9]">
+          <BrandAccentBar />
+          <div className="h-16 px-8 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              {showBack && onBack && (
+                <>
+                  <button
+                    type="button"
+                    onClick={onBack}
+                    className="inline-flex items-center gap-2 text-sm font-semibold text-[#5A5851] hover:text-[#141413] transition-colors cursor-pointer whitespace-nowrap"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    <span>Retour aux missions</span>
+                  </button>
+                  <span aria-hidden="true" className="w-px h-5 bg-[#E5E2D9]" />
+                </>
+              )}
+              <span className="font-display font-bold text-base text-[#141413] truncate">
+                {activeTab === 'dashboard' && !showBack ? 'Tableau de bord' : pageTitle}
+              </span>
+            </div>
+
+            {profile && (
+              <div className="flex items-center gap-4 shrink-0">
+                <div className="text-right leading-tight">
+                  <p className="text-sm font-semibold text-[#141413] whitespace-nowrap">
+                    {profile.firstName} {profile.lastName}
+                  </p>
+                  <p className="text-xs text-[#5A5851] whitespace-nowrap">{profile.workZone}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onSelectTab('notifications')}
+                  aria-label="Voir les alertes"
+                  className="relative w-10 h-10 rounded-xl border border-[#E5E2D9] bg-white hover:bg-[#F7F6F2] text-[#141413] flex items-center justify-center transition-colors cursor-pointer"
+                >
+                  <Bell className="w-4 h-4" aria-hidden="true" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-[#C6241B] text-white font-mono text-[10px] font-bold flex items-center justify-center tabular-nums">
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                  )}
+                </button>
+              </div>
+            )}
           </div>
-        )}
+        </header>
 
         {/* Toast Feedback */}
         {toast && (
-          <div className="fixed top-16 lg:top-5 right-4 left-4 sm:left-auto sm:w-96 z-50">
+          <div className="fixed top-16 lg:top-20 right-4 left-4 sm:left-auto sm:w-96 z-50">
             <div
               role="status"
               className={`rounded-xl px-4 py-3 border shadow-sm flex items-center justify-between gap-3 text-sm font-medium ${
