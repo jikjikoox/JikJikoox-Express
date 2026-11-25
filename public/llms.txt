@@ -1,0 +1,27 @@
+# JikJikoox Express
+
+> Application web mobile-first dédiée aux livreurs de la marketplace sénégalaise JikJikoox, opérant à Dakar et au Sénégal.
+
+## Présentation
+
+JikJikoox Express (accessible sur https://livraison.jikjikoox.com/) est l'espace opérationnel des coursiers partenaires de la marketplace JikJikoox. Elle permet aux livreurs autorisés de gérer l'ensemble du cycle de livraison de bout en bout sur smartphone et ordinateur.
+
+## Fonctionnalités principales
+
+- **Tableau de bord et performance hebdomadaire** : suivi des missions accomplies sur 7 jours, taux de succès des livraisons, revenus estimés et statut de disponibilité en un geste.
+- **Gestion des missions en temps réel** : consultation des commandes affectées, prise en charge, itinéraire et détails du point de retrait et du client à Dakar.
+- **Workflow de statuts contrôlés** : transitions strictes et horodatées (`ASSIGNED` -> `ACCEPTED` -> `PICKED_UP` -> `IN_TRANSIT` -> `ARRIVED` -> `DELIVERED`, ainsi que la gestion sécurisée des échecs et retours).
+- **Encaissements à la livraison (COD)** : suivi transparent des montants en FCFA à encaisser et confirmation sécurisée lors de la remise.
+- **Preuves de livraison (PoD)** : enregistrement du destinataire, code de confirmation et note de remise.
+- **Alertes et historique** : notifications opérationnelles en temps réel et historique complet des courses réalisées.
+
+## Zone couverte et langue
+
+- **Pays / Ville** : Sénégal — Dakar et sa région.
+- **Langue** : Français (`fr-SN`).
+- **Devise** : Franc CFA (XOF / FCFA).
+
+## Liens officiels
+
+- Application Livreurs : https://livraison.jikjikoox.com/
+- Plan du site : https://livraison.jikjikoox.com/sitemap.xml

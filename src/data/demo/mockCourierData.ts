@@ -1,3 +1,4 @@
+import { DEFAULT_COURIER_AVATAR, LOGIN_HERO_IMAGE } from '../../lib/mediaAssets';
 import type {
   CourierNotification,
   CourierProfile,
@@ -9,8 +10,8 @@ import type {
  * Utilisées uniquement pour le mode Aperçu Démonstration et le jeu d'essai sandbox.
  */
 
-export const DEMO_COURIER_AVATAR = '/src/assets/images/courier_avatar_1795601739751.jpg';
-export const LOGIN_HERO_IMAGE = '/src/assets/images/dakar_login_hero_1795601740656.jpg';
+export const DEMO_COURIER_AVATAR = DEFAULT_COURIER_AVATAR;
+export { LOGIN_HERO_IMAGE };
 
 const now = Date.now();
 const minutesAgo = (mins: number) => new Date(now - mins * 60_000).toISOString();

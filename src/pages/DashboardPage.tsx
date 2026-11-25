@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { lazy, Suspense, useMemo } from 'react';
 import {
   ArrowRight,
   Banknote,
@@ -10,7 +10,6 @@ import {
   Truck,
 } from 'lucide-react';
 import { BrandAccentBar } from '../components/BrandLogo';
-import { DashboardChart } from '../components/DashboardChart';
 import { MissionCard } from '../components/MissionCard';
 import { useCourierApp } from '../context/CourierAppContext';
 import {
@@ -20,6 +19,10 @@ import {
   NOTIFICATION_CATEGORY_LABELS,
 } from '../lib/missionWorkflow';
 import type { AppTab } from '../types/delivery';
+
+const DashboardChart = lazy(() =>
+  import('../components/DashboardChart').then((m) => ({ default: m.DashboardChart }))
+);
 
 interface DashboardPageProps {
   onSelectMission: (missionId: string) => void;
@@ -146,8 +149,17 @@ export function DashboardPage({ onSelectMission, onNavigateTab }: DashboardPageP
         </div>
       </section>
 
-      {/* Weekly Missions Accomplished & Success Rate Chart (Recharts) */}
-      <DashboardChart missions={missions} />
+      {/* Weekly Missions Accomplished & Success Rate Chart (Recharts — lazy-loaded) */}
+      <Suspense
+        fallback={
+          <section
+            aria-label="Chargement du graphique hebdomadaire"
+            className="bg-white border border-[#E5E2D9] rounded-2xl p-5 sm:p-6 h-[356px] animate-pulse"
+          />
+        }
+      >
+        <DashboardChart missions={missions} />
+      </Suspense>
 
       {/* Firebase Active Courier Empty State — never writes fake missions to Firestore */}
       {mode === 'firebase' && !loadingData && missions.length === 0 && (

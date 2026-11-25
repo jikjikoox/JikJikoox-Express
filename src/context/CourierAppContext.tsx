@@ -36,12 +36,7 @@ import {
   mapEdgeNotificationToClient,
 } from '../lib/supabaseContract';
 import { expressApi, ExpressApiError } from '../services/expressApi';
-import {
-  buildDemoMissions,
-  buildDemoNotifications,
-  DEMO_COURIER_AVATAR,
-  DEMO_COURIER_PROFILE,
-} from '../data/demo/mockCourierData';
+import { DEFAULT_COURIER_AVATAR } from '../lib/mediaAssets';
 import type {
   AccountStatus,
   CourierNotification,
@@ -273,7 +268,7 @@ export function CourierAppProvider({ children }: { children: React.ReactNode }) 
           const { firstName, lastName } = parseDisplayName(firebaseUser.displayName, email);
           const safePhoto = isSafePhotoUrl(firebaseUser.photoURL)
             ? firebaseUser.photoURL
-            : DEMO_COURIER_AVATAR;
+            : DEFAULT_COURIER_AVATAR;
 
           await setDoc(courierRef, {
             uid,
@@ -310,7 +305,7 @@ export function CourierAppProvider({ children }: { children: React.ReactNode }) 
           const data = snap.data();
           const safePhoto = isSafePhotoUrl(typeof data.photoUrl === 'string' ? data.photoUrl : null)
             ? String(data.photoUrl)
-            : DEMO_COURIER_AVATAR;
+            : DEFAULT_COURIER_AVATAR;
 
           setProfile({
             uid: String(data.uid ?? uid),
@@ -463,14 +458,21 @@ export function CourierAppProvider({ children }: { children: React.ReactNode }) 
     }
   }, [showToast]);
 
-  // Mode démonstration 100 % local en mémoire — ZERO appel Supabase / Firebase
+  // Mode démonstration 100 % local en mémoire — ZERO appel Supabase / Firebase (chargé à la demande)
   const enterDemoMode = useCallback(() => {
     setAuthError(null);
-    setMode('demo');
-    setProfile({ ...DEMO_COURIER_PROFILE });
-    setMissions(buildDemoMissions(DEMO_COURIER_PROFILE.uid));
-    setNotifications(buildDemoNotifications(DEMO_COURIER_PROFILE.uid));
-    showToast('Mode démonstration local activé (données Dakar isolées).', 'yellow');
+    setLoadingData(true);
+    void import('../data/demo/mockCourierData')
+      .then(({ buildDemoMissions, buildDemoNotifications, DEMO_COURIER_PROFILE }) => {
+        setMode('demo');
+        setProfile({ ...DEMO_COURIER_PROFILE });
+        setMissions(buildDemoMissions(DEMO_COURIER_PROFILE.uid));
+        setNotifications(buildDemoNotifications(DEMO_COURIER_PROFILE.uid));
+        showToast('Mode démonstration local activé (données Dakar isolées).', 'yellow');
+      })
+      .finally(() => {
+        setLoadingData(false);
+      });
   }, [showToast]);
 
   const exitDemoMode = useCallback(() => {

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import {
   AlertTriangle,
   Banknote,
@@ -15,7 +15,6 @@ import {
   Phone,
   Store,
 } from 'lucide-react';
-import { ProofOfDeliverySheet } from '../components/ProofOfDeliverySheet';
 import { StatusIndicator } from '../components/StatusIndicator';
 import { useCourierApp } from '../context/CourierAppContext';
 import { useCourierActions } from '../hooks/useCourierActions';
@@ -28,6 +27,12 @@ import {
   MISSION_STATUS_META,
 } from '../lib/missionWorkflow';
 import type { MissionStatus, ProofSubmission } from '../types/delivery';
+
+const ProofOfDeliverySheet = lazy(() =>
+  import('../components/ProofOfDeliverySheet').then((m) => ({
+    default: m.ProofOfDeliverySheet,
+  }))
+);
 
 interface MissionDetailPageProps {
   missionId: string;
@@ -455,15 +460,17 @@ export function MissionDetailPage({ missionId, onBack }: MissionDetailPageProps)
         </div>
       </div>
 
-      {/* Proof of Delivery / Failure Modal Sheet */}
+      {/* Proof of Delivery / Failure Modal Sheet (lazy-loaded on demand) */}
       {activeSheet && (
-        <ProofOfDeliverySheet
-          mission={mission}
-          sheetMode={activeSheet}
-          onClose={() => setActiveSheet(null)}
-          onConfirmDelivery={handleConfirmDelivery}
-          onConfirmFailure={handleConfirmFailure}
-        />
+        <Suspense fallback={null}>
+          <ProofOfDeliverySheet
+            mission={mission}
+            sheetMode={activeSheet}
+            onClose={() => setActiveSheet(null)}
+            onConfirmDelivery={handleConfirmDelivery}
+            onConfirmFailure={handleConfirmFailure}
+          />
+        </Suspense>
       )}
     </div>
   );

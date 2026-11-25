@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { BrandAccentBar, BrandLogo } from '../components/BrandLogo';
 import { useCourierApp } from '../context/CourierAppContext';
-import { LOGIN_HERO_IMAGE } from '../data/demo/mockCourierData';
+import { LOGIN_HERO_IMAGE } from '../lib/mediaAssets';
 
 export function LoginPage() {
   const { signInWithGoogle, enterDemoMode, authError } = useCourierApp();

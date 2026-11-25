@@ -22,6 +22,12 @@ const WORDMARK_SIZES: Record<'sm' | 'md' | 'lg', string> = {
   lg: 'text-xl',
 };
 
+const IMAGE_PX: Record<'sm' | 'md' | 'lg', number> = {
+  sm: 32,
+  md: 40,
+  lg: 56,
+};
+
 export function BrandLogo({
   size = 'md',
   showWordmark = false,
@@ -44,6 +50,9 @@ export function BrandLogo({
           <img
             src={BRAND_LOGO_SRC}
             alt="Logo JikJikoox"
+            width={IMAGE_PX[size]}
+            height={IMAGE_PX[size]}
+            decoding="async"
             referrerPolicy="no-referrer"
             onError={() => setImgError(true)}
             className="w-full h-full object-contain"

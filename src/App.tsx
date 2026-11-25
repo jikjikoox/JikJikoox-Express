@@ -1,17 +1,35 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { Clock, LogOut, ShieldAlert, Truck } from 'lucide-react';
-import { AppShell } from './components/AppShell';
 import { BrandAccentBar, BrandLogo } from './components/BrandLogo';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { CourierAppProvider, useCourierApp } from './context/CourierAppContext';
-import { DashboardPage } from './pages/DashboardPage';
-import { HistoryPage } from './pages/HistoryPage';
-import { LoginPage } from './pages/LoginPage';
-import { MissionDetailPage } from './pages/MissionDetailPage';
-import { MissionsPage } from './pages/MissionsPage';
-import { NotificationsPage } from './pages/NotificationsPage';
-import { ProfilePage } from './pages/ProfilePage';
 import type { AppTab } from './types/delivery';
+
+const AppShell = lazy(() =>
+  import('./components/AppShell').then((m) => ({ default: m.AppShell }))
+);
+const LoginPage = lazy(() =>
+  import('./pages/LoginPage').then((m) => ({ default: m.LoginPage }))
+);
+
+const DashboardPage = lazy(() =>
+  import('./pages/DashboardPage').then((m) => ({ default: m.DashboardPage }))
+);
+const HistoryPage = lazy(() =>
+  import('./pages/HistoryPage').then((m) => ({ default: m.HistoryPage }))
+);
+const MissionDetailPage = lazy(() =>
+  import('./pages/MissionDetailPage').then((m) => ({ default: m.MissionDetailPage }))
+);
+const MissionsPage = lazy(() =>
+  import('./pages/MissionsPage').then((m) => ({ default: m.MissionsPage }))
+);
+const NotificationsPage = lazy(() =>
+  import('./pages/NotificationsPage').then((m) => ({ default: m.NotificationsPage }))
+);
+const ProfilePage = lazy(() =>
+  import('./pages/ProfilePage').then((m) => ({ default: m.ProfilePage }))
+);
 
 const TAB_TITLES: Record<AppTab, string> = {
   dashboard: 'JikJikoox Express',
@@ -45,7 +63,17 @@ function CourierExpressRouter() {
   }
 
   if (mode === 'unauthenticated') {
-    return <LoginPage />;
+    return (
+      <Suspense
+        fallback={
+          <div className="min-h-screen bg-[#F7F6F2] flex items-center justify-center p-6">
+            <BrandLogo size="lg" showWordmark />
+          </div>
+        }
+      >
+        <LoginPage />
+      </Suspense>
+    );
   }
 
   // Gate 1 : Livreur authentifié en attente de validation par JikJikoox Admin
@@ -164,33 +192,50 @@ function CourierExpressRouter() {
   const pageTitle = selectedMissionId ? 'Détail de la mission' : TAB_TITLES[activeTab];
 
   return (
-    <AppShell
-      activeTab={activeTab}
-      onSelectTab={handleSelectTab}
-      pageTitle={pageTitle}
-      showBack={Boolean(selectedMissionId)}
-      onBack={handleBackFromMission}
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#F7F6F2] flex items-center justify-center p-6">
+          <BrandLogo size="lg" showWordmark />
+        </div>
+      }
     >
-      {selectedMissionId ? (
-        <MissionDetailPage
-          missionId={selectedMissionId}
-          onBack={handleBackFromMission}
-        />
-      ) : activeTab === 'dashboard' ? (
-        <DashboardPage
-          onSelectMission={handleSelectMission}
-          onNavigateTab={handleSelectTab}
-        />
-      ) : activeTab === 'missions' ? (
-        <MissionsPage onSelectMission={handleSelectMission} />
-      ) : activeTab === 'history' ? (
-        <HistoryPage onSelectMission={handleSelectMission} />
-      ) : activeTab === 'notifications' ? (
-        <NotificationsPage onSelectMission={handleSelectMission} />
-      ) : (
-        <ProfilePage />
-      )}
-    </AppShell>
+      <AppShell
+        activeTab={activeTab}
+        onSelectTab={handleSelectTab}
+        pageTitle={pageTitle}
+        showBack={Boolean(selectedMissionId)}
+        onBack={handleBackFromMission}
+      >
+        <Suspense
+          fallback={
+            <div className="space-y-4 py-4" aria-busy="true" aria-label="Chargement de la page">
+              <div className="h-32 rounded-2xl bg-white border border-[#E5E2D9] animate-pulse" />
+              <div className="h-64 rounded-2xl bg-white border border-[#E5E2D9] animate-pulse" />
+            </div>
+          }
+        >
+          {selectedMissionId ? (
+            <MissionDetailPage
+              missionId={selectedMissionId}
+              onBack={handleBackFromMission}
+            />
+          ) : activeTab === 'dashboard' ? (
+            <DashboardPage
+              onSelectMission={handleSelectMission}
+              onNavigateTab={handleSelectTab}
+            />
+          ) : activeTab === 'missions' ? (
+            <MissionsPage onSelectMission={handleSelectMission} />
+          ) : activeTab === 'history' ? (
+            <HistoryPage onSelectMission={handleSelectMission} />
+          ) : activeTab === 'notifications' ? (
+            <NotificationsPage onSelectMission={handleSelectMission} />
+          ) : (
+            <ProfilePage />
+          )}
+        </Suspense>
+      </AppShell>
+    </Suspense>
   );
 }
 
