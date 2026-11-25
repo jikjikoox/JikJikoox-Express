@@ -24,12 +24,8 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Resolve dependencies and report lockfile changes
-        run: |
-          bun install
-          echo "::group::Generated bun.lock diff"
-          git diff -- bun.lock
-          echo "::endgroup::"
+      - name: Install dependencies from committed lockfile
+        run: bun install --frozen-lockfile
 
       - name: TypeScript validation
         run: bun run lint
