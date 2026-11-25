@@ -1,0 +1,892 @@
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import {
+  onAuthStateChanged,
+  signInWithPopup,
+  signOut,
+  type User,
+} from 'firebase/auth';
+import {
+  collection,
+  doc,
+  getDoc,
+  onSnapshot,
+  query,
+  serverTimestamp,
+  setDoc,
+  Timestamp,
+  updateDoc,
+  where,
+  writeBatch,
+} from 'firebase/firestore';
+import { auth, db, googleProvider, testFirestoreConnection } from '../lib/firebase';
+import { handleFirestoreError, OperationType } from '../lib/firestoreErrors';
+import { isTransitionAllowed, MISSION_STATUS_META } from '../lib/missionWorkflow';
+import {
+  isSupabaseBackendConfigured,
+  mapEdgeDeliveryToMission,
+  mapEdgeDriverToProfile,
+  mapEdgeNotificationToClient,
+} from '../lib/supabaseContract';
+import { expressApi, ExpressApiError } from '../services/expressApi';
+import {
+  buildDemoMissions,
+  buildDemoNotifications,
+  DEMO_COURIER_AVATAR,
+  DEMO_COURIER_PROFILE,
+} from '../data/demo/mockCourierData';
+import type {
+  AccountStatus,
+  CourierNotification,
+  CourierProfile,
+  DeliveryMission,
+  MissionEvent,
+  MissionStatus,
+  ProofSubmission,
+  VehicleType,
+} from '../types/delivery';
+
+export type SessionMode = 'unauthenticated' | 'firebase' | 'demo';
+
+export interface ToastMessage {
+  id: number;
+  tone: 'green' | 'yellow' | 'red';
+  text: string;
+}
+
+export interface ProfileUpdateInput {
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  vehicleType?: VehicleType;
+  vehiclePlate?: string;
+  workZone?: string;
+  isAvailable?: boolean;
+  notificationsEnabled?: boolean;
+  pushSoundEnabled?: boolean;
+}
+
+interface CourierAppContextValue {
+  mode: SessionMode;
+  backendConnected: boolean;
+  authReady: boolean;
+  loadingData: boolean;
+  firebaseUser: User | null;
+  isAdminUser: boolean;
+  profile: CourierProfile | null;
+  missions: DeliveryMission[];
+  notifications: CourierNotification[];
+  unreadCount: number;
+  authError: string | null;
+  toast: ToastMessage | null;
+  dismissToast: () => void;
+  showToast: (text: string, tone?: 'green' | 'yellow' | 'red') => void;
+  signInWithGoogle: () => Promise<void>;
+  enterDemoMode: () => void;
+  exitDemoMode: () => void;
+  logout: () => Promise<void>;
+  refreshBackendData: () => Promise<void>;
+  toggleAvailability: () => Promise<void>;
+  updateProfile: (updates: ProfileUpdateInput) => Promise<void>;
+  transitionMission: (
+    missionId: string,
+    nextStatus: MissionStatus,
+    options?: { proof?: ProofSubmission; failureReason?: string }
+  ) => Promise<boolean>;
+  markNotificationRead: (notificationId: string) => Promise<void>;
+  markAllNotificationsRead: () => Promise<void>;
+}
+
+const CourierAppContext = createContext<CourierAppContextValue | null>(null);
+
+function tsToIso(value: unknown, fallbackIso?: string): string {
+  if (value instanceof Timestamp) {
+    return value.toDate().toISOString();
+  }
+  if (typeof value === 'string') {
+    return value;
+  }
+  return fallbackIso ?? new Date().toISOString();
+}
+
+function isSafePhotoUrl(url: string | null | undefined): url is string {
+  if (!url || url.length > 500) return false;
+  return url.startsWith('https://') || url.startsWith('/src/assets/');
+}
+
+function normalizeAccountStatus(raw: unknown): AccountStatus {
+  if (raw === 'active' || raw === 'suspended' || raw === 'disabled' || raw === 'pending') {
+    return raw;
+  }
+  return 'pending';
+}
+
+function parseDisplayName(displayName: string | null | undefined, email: string): {
+  firstName: string;
+  lastName: string;
+} {
+  const clean = (displayName || '').trim();
+  if (clean.length > 0) {
+    const parts = clean.split(/\s+/);
+    const firstName = parts[0].slice(0, 60);
+    const lastName = (parts.slice(1).join(' ') || 'Livreur').slice(0, 60);
+    return { firstName, lastName };
+  }
+  const emailPrefix = email.split('@')[0] || 'Livreur';
+  return {
+    firstName: emailPrefix.slice(0, 60),
+    lastName: 'JikJikoox',
+  };
+}
+
+export function CourierAppProvider({ children }: { children: React.ReactNode }) {
+  const backendConnected = isSupabaseBackendConfigured();
+
+  const [mode, setMode] = useState<SessionMode>('unauthenticated');
+  const [authReady, setAuthReady] = useState(false);
+  const [loadingData, setLoadingData] = useState(false);
+  const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
+  const [isAdminUser, setIsAdminUser] = useState(false);
+  const [profile, setProfile] = useState<CourierProfile | null>(null);
+  const [missions, setMissions] = useState<DeliveryMission[]>([]);
+  const [notifications, setNotifications] = useState<CourierNotification[]>([]);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [toast, setToast] = useState<ToastMessage | null>(null);
+
+  const showToast = useCallback((text: string, tone: 'green' | 'yellow' | 'red' = 'green') => {
+    setToast({ id: Date.now(), tone, text });
+  }, []);
+
+  const dismissToast = useCallback(() => setToast(null), []);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(null), 4200);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
+  // 1. Firebase Auth state observer
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (user) => {
+      setFirebaseUser(user);
+      if (user) {
+        setMode((prev) => (prev === 'demo' ? 'demo' : 'firebase'));
+        setAuthError(null);
+      } else {
+        setIsAdminUser(false);
+        setMode((prev) => {
+          if (prev === 'demo') return 'demo';
+          setProfile(null);
+          setMissions([]);
+          setNotifications([]);
+          return 'unauthenticated';
+        });
+      }
+      setAuthReady(true);
+    });
+    return () => unsub();
+  }, []);
+
+  // Chargement officiel depuis les Supabase Edge Functions (si configuré)
+  const refreshBackendData = useCallback(async () => {
+    if (mode !== 'firebase' || !firebaseUser || !backendConnected) return;
+    try {
+      const idToken = await firebaseUser.getIdToken();
+      const profileRes = await expressApi.fetchDriverProfile(idToken);
+      const mappedProfile = mapEdgeDriverToProfile(profileRes.profile);
+      setProfile(mappedProfile);
+
+      if (mappedProfile.accountStatus === 'active') {
+        const [delivRes, notifRes] = await Promise.all([
+          expressApi.fetchDriverDeliveries(idToken),
+          expressApi.fetchNotifications(idToken),
+        ]);
+        setMissions(delivRes.deliveries.map(mapEdgeDeliveryToMission));
+        setNotifications(notifRes.notifications.map(mapEdgeNotificationToClient));
+      } else {
+        setMissions([]);
+        setNotifications([]);
+      }
+    } catch (err) {
+      if (err instanceof ExpressApiError) {
+        showToast(err.message, 'red');
+      }
+    }
+  }, [mode, firebaseUser, backendConnected, showToast]);
+
+  // 2. Profil livreur : Supabase Edge Function en priorité si configuré, sinon miroir Firestore
+  useEffect(() => {
+    if (mode !== 'firebase' || !firebaseUser) {
+      return;
+    }
+
+    const uid = firebaseUser.uid;
+    let active = true;
+    setLoadingData(true);
+
+    if (backendConnected) {
+      void (async () => {
+        try {
+          await refreshBackendData();
+        } finally {
+          if (active) setLoadingData(false);
+        }
+      })();
+      return () => {
+        active = false;
+      };
+    }
+
+    void testFirestoreConnection();
+
+    const checkAdminRecord = async () => {
+      try {
+        const adminSnap = await getDoc(doc(db, 'admins', uid));
+        if (active) {
+          setIsAdminUser(adminSnap.exists() && adminSnap.data()?.active === true);
+        }
+      } catch {
+        if (active) setIsAdminUser(false);
+      }
+    };
+    void checkAdminRecord();
+
+    const courierRef = doc(db, 'couriers', uid);
+
+    const ensureCourierRegistration = async () => {
+      try {
+        const snap = await getDoc(courierRef);
+        if (!snap.exists() && active) {
+          const email = firebaseUser.email;
+          if (!email || !firebaseUser.emailVerified) {
+            setAuthError('Votre adresse email Google doit être vérifiée pour accéder au service.');
+            setLoadingData(false);
+            return;
+          }
+          const { firstName, lastName } = parseDisplayName(firebaseUser.displayName, email);
+          const safePhoto = isSafePhotoUrl(firebaseUser.photoURL)
+            ? firebaseUser.photoURL
+            : DEMO_COURIER_AVATAR;
+
+          await setDoc(courierRef, {
+            uid,
+            firstName,
+            lastName,
+            email: email.slice(0, 160),
+            phone: '+221 77 000 00 00',
+            photoUrl: safePhoto,
+            vehicleType: 'scooter',
+            vehiclePlate: 'DK-0000-JK',
+            workZone: 'Dakar Plateau',
+            isAvailable: false,
+            role: 'courier',
+            accountStatus: 'pending',
+            notificationsEnabled: true,
+            pushSoundEnabled: true,
+            fcmTokenStatus: 'pending',
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+        }
+      } catch (error) {
+        handleFirestoreError(error, OperationType.WRITE, `couriers/${uid}`);
+      }
+    };
+
+    void ensureCourierRegistration();
+
+    const unsubProfile = onSnapshot(
+      courierRef,
+      (snap) => {
+        if (!active) return;
+        if (snap.exists()) {
+          const data = snap.data();
+          const safePhoto = isSafePhotoUrl(typeof data.photoUrl === 'string' ? data.photoUrl : null)
+            ? String(data.photoUrl)
+            : DEMO_COURIER_AVATAR;
+
+          setProfile({
+            uid: String(data.uid ?? uid),
+            firstName: String(data.firstName ?? 'Livreur'),
+            lastName: String(data.lastName ?? ''),
+            email: String(data.email ?? firebaseUser.email ?? ''),
+            phone: String(data.phone ?? '+221 77 000 00 00'),
+            photoUrl: safePhoto,
+            vehicleType: (data.vehicleType as VehicleType) ?? 'scooter',
+            vehiclePlate: typeof data.vehiclePlate === 'string' ? data.vehiclePlate : undefined,
+            workZone: String(data.workZone ?? 'Dakar Plateau'),
+            isAvailable: Boolean(data.isAvailable),
+            role: 'courier',
+            accountStatus: normalizeAccountStatus(data.accountStatus),
+            notificationsEnabled: Boolean(data.notificationsEnabled),
+            pushSoundEnabled: Boolean(data.pushSoundEnabled),
+            fcmTokenStatus:
+              data.fcmTokenStatus === 'registered' || data.fcmTokenStatus === 'pending'
+                ? data.fcmTokenStatus
+                : 'unregistered',
+            createdAtIso: tsToIso(data.createdAt),
+            updatedAtIso: tsToIso(data.updatedAt),
+          });
+        }
+        setLoadingData(false);
+      },
+      (error) => {
+        handleFirestoreError(error, OperationType.GET, `couriers/${uid}`);
+      }
+    );
+
+    return () => {
+      active = false;
+      unsubProfile();
+    };
+  }, [mode, firebaseUser, backendConnected, refreshBackendData]);
+
+  // 3. Miroir opérationnel temps réel Firestore (LECTURE SEULE pour missions)
+  const isAuthorizedActiveCourier =
+    mode === 'firebase' && Boolean(firebaseUser) && profile?.accountStatus === 'active';
+
+  useEffect(() => {
+    if (!isAuthorizedActiveCourier || !firebaseUser) {
+      if (mode === 'firebase') {
+        setMissions([]);
+        setNotifications([]);
+      }
+      return;
+    }
+
+    const uid = firebaseUser.uid;
+    let active = true;
+
+    const missionsQuery = query(collection(db, 'missions'), where('courierId', '==', uid));
+    const unsubMissions = onSnapshot(
+      missionsQuery,
+      (snapshot) => {
+        if (!active || (backendConnected && snapshot.empty)) return;
+        const list: DeliveryMission[] = snapshot.docs.map((d) => {
+          const data = d.data();
+          return {
+            missionId: String(data.missionId ?? d.id),
+            orderNumber: String(data.orderNumber ?? ''),
+            courierId: String(data.courierId ?? uid),
+            dataSource: 'supabase_sync',
+            customerName: String(data.customerName ?? ''),
+            customerPhone: String(data.customerPhone ?? ''),
+            deliveryAddress: String(data.deliveryAddress ?? ''),
+            deliveryZone: String(data.deliveryZone ?? ''),
+            pickupName: String(data.pickupName ?? ''),
+            pickupAddress: String(data.pickupAddress ?? ''),
+            gpsLat: typeof data.gpsLat === 'number' ? data.gpsLat : undefined,
+            gpsLng: typeof data.gpsLng === 'number' ? data.gpsLng : undefined,
+            itemsSummary: Array.isArray(data.itemsSummary) ? data.itemsSummary : [],
+            itemCount: typeof data.itemCount === 'number' ? data.itemCount : 1,
+            paymentMode: data.paymentMode === 'cod' ? 'cod' : 'prepaid',
+            codAmount: typeof data.codAmount === 'number' ? data.codAmount : 0,
+            estimatedFee: typeof data.estimatedFee === 'number' ? data.estimatedFee : 0,
+            instructions: String(data.instructions ?? ''),
+            status: (data.status as MissionStatus) ?? 'ASSIGNED',
+            proofCode: typeof data.proofCode === 'string' ? data.proofCode : undefined,
+            proofNote: typeof data.proofNote === 'string' ? data.proofNote : undefined,
+            recipientName: typeof data.recipientName === 'string' ? data.recipientName : undefined,
+            failureReason: typeof data.failureReason === 'string' ? data.failureReason : undefined,
+            events: Array.isArray(data.events) ? data.events : [],
+            createdAtIso: tsToIso(data.createdAt),
+            updatedAtIso: tsToIso(data.updatedAt),
+          };
+        });
+        list.sort((a, b) => new Date(b.createdAtIso).getTime() - new Date(a.createdAtIso).getTime());
+        setMissions(list);
+      },
+      (error) => {
+        if (!backendConnected) {
+          handleFirestoreError(error, OperationType.LIST, 'missions');
+        }
+      }
+    );
+
+    const notifsQuery = query(collection(db, 'notifications'), where('courierId', '==', uid));
+    const unsubNotifs = onSnapshot(
+      notifsQuery,
+      (snapshot) => {
+        if (!active || (backendConnected && snapshot.empty)) return;
+        const list: CourierNotification[] = snapshot.docs.map((d) => {
+          const data = d.data();
+          return {
+            notificationId: String(data.notificationId ?? d.id),
+            courierId: String(data.courierId ?? uid),
+            dataSource: 'supabase_sync',
+            category: data.category ?? 'operational',
+            title: String(data.title ?? ''),
+            body: String(data.body ?? ''),
+            missionId: typeof data.missionId === 'string' ? data.missionId : undefined,
+            isRead: Boolean(data.isRead),
+            createdAtIso: tsToIso(data.createdAt),
+            readAtIso: data.readAt ? tsToIso(data.readAt) : undefined,
+          };
+        });
+        list.sort((a, b) => new Date(b.createdAtIso).getTime() - new Date(a.createdAtIso).getTime());
+        setNotifications(list);
+      },
+      (error) => {
+        if (!backendConnected) {
+          handleFirestoreError(error, OperationType.LIST, 'notifications');
+        }
+      }
+    );
+
+    return () => {
+      active = false;
+      unsubMissions();
+      unsubNotifs();
+    };
+  }, [isAuthorizedActiveCourier, firebaseUser, mode, backendConnected]);
+
+  const signInWithGoogle = useCallback(async () => {
+    setAuthError(null);
+    try {
+      await signInWithPopup(auth, googleProvider);
+      setMode('firebase');
+      showToast('Authentification Google réussie.', 'green');
+    } catch (error) {
+      const code = (error as { code?: string })?.code;
+      if (code === 'auth/popup-closed-by-user') {
+        setAuthError('Fenêtre de connexion fermée avant validation.');
+      } else {
+        setAuthError('Impossible de finaliser la connexion Google. Veuillez réessayer.');
+      }
+    }
+  }, [showToast]);
+
+  // Mode démonstration 100 % local en mémoire — ZERO appel Supabase / Firebase
+  const enterDemoMode = useCallback(() => {
+    setAuthError(null);
+    setMode('demo');
+    setProfile({ ...DEMO_COURIER_PROFILE });
+    setMissions(buildDemoMissions(DEMO_COURIER_PROFILE.uid));
+    setNotifications(buildDemoNotifications(DEMO_COURIER_PROFILE.uid));
+    showToast('Mode démonstration local activé (données Dakar isolées).', 'yellow');
+  }, [showToast]);
+
+  const exitDemoMode = useCallback(() => {
+    setProfile(null);
+    setMissions([]);
+    setNotifications([]);
+    setMode(firebaseUser ? 'firebase' : 'unauthenticated');
+  }, [firebaseUser]);
+
+  const logout = useCallback(async () => {
+    if (firebaseUser) {
+      await signOut(auth);
+    }
+    setMode('unauthenticated');
+    setIsAdminUser(false);
+    setProfile(null);
+    setMissions([]);
+    setNotifications([]);
+    showToast('Session clôturée en toute sécurité.', 'green');
+  }, [firebaseUser, showToast]);
+
+  const updateProfile = useCallback(
+    async (updates: ProfileUpdateInput) => {
+      if (!profile) return;
+
+      const clean: ProfileUpdateInput = {};
+      if (typeof updates.firstName === 'string' && updates.firstName.trim()) {
+        clean.firstName = updates.firstName.trim().slice(0, 60);
+      }
+      if (typeof updates.lastName === 'string' && updates.lastName.trim()) {
+        clean.lastName = updates.lastName.trim().slice(0, 60);
+      }
+      if (typeof updates.phone === 'string' && updates.phone.trim().length >= 7) {
+        clean.phone = updates.phone.trim().slice(0, 24);
+      }
+      if (updates.vehicleType) clean.vehicleType = updates.vehicleType;
+      if (typeof updates.vehiclePlate === 'string') {
+        clean.vehiclePlate = updates.vehiclePlate.trim().slice(0, 24);
+      }
+      if (typeof updates.workZone === 'string' && updates.workZone.trim().length >= 2) {
+        clean.workZone = updates.workZone.trim().slice(0, 80);
+      }
+      if (typeof updates.isAvailable === 'boolean') clean.isAvailable = updates.isAvailable;
+      if (typeof updates.notificationsEnabled === 'boolean') {
+        clean.notificationsEnabled = updates.notificationsEnabled;
+      }
+      if (typeof updates.pushSoundEnabled === 'boolean') {
+        clean.pushSoundEnabled = updates.pushSoundEnabled;
+      }
+
+      if (mode === 'demo') {
+        setProfile((prev) =>
+          prev ? { ...prev, ...clean, updatedAtIso: new Date().toISOString() } : null
+        );
+        showToast('Profil mis à jour (mode démonstration local).', 'green');
+        return;
+      }
+
+      if (mode !== 'firebase' || !firebaseUser || profile.accountStatus !== 'active') {
+        showToast('Modification refusée : compte livreur non actif.', 'red');
+        return;
+      }
+
+      if (backendConnected) {
+        try {
+          const idToken = await firebaseUser.getIdToken();
+          const res = await expressApi.updateDriverProfile(idToken, clean);
+          setProfile(mapEdgeDriverToProfile(res.profile));
+          showToast('Paramètres enregistrés dans JikJikoox.', 'green');
+        } catch (err) {
+          showToast(
+            err instanceof ExpressApiError ? err.message : 'Erreur lors de la sauvegarde.',
+            'red'
+          );
+        }
+        return;
+      }
+
+      const path = `couriers/${firebaseUser.uid}`;
+      try {
+        await updateDoc(doc(db, 'couriers', firebaseUser.uid), {
+          ...clean,
+          updatedAt: serverTimestamp(),
+        });
+        showToast('Paramètres enregistrés.', 'green');
+      } catch (error) {
+        handleFirestoreError(error, OperationType.UPDATE, path);
+      }
+    },
+    [mode, profile, firebaseUser, backendConnected, showToast]
+  );
+
+  const toggleAvailability = useCallback(async () => {
+    if (!profile) return;
+    if (mode === 'firebase' && profile.accountStatus !== 'active') {
+      showToast('Votre compte doit être validé par JikJikoox Admin.', 'red');
+      return;
+    }
+    const next = !profile.isAvailable;
+    await updateProfile({ isAvailable: next });
+    showToast(
+      next ? 'Statut : Disponible pour de nouvelles missions.' : 'Statut : Indisponible (pause).',
+      next ? 'green' : 'yellow'
+    );
+  }, [mode, profile, updateProfile, showToast]);
+
+  const inFlightTransitionsRef = useRef<Set<string>>(new Set());
+
+  const transitionMission = useCallback(
+    async (
+      missionId: string,
+      nextStatus: MissionStatus,
+      options?: { proof?: ProofSubmission; failureReason?: string }
+    ): Promise<boolean> => {
+      if (inFlightTransitionsRef.current.has(missionId)) {
+        return false;
+      }
+      const target = missions.find((m) => m.missionId === missionId);
+      if (!target) return false;
+
+      if (!isTransitionAllowed(target.status, nextStatus)) {
+        showToast('Transition de statut non autorisée par le protocole.', 'red');
+        return false;
+      }
+
+      if (nextStatus === 'DELIVERED') {
+        const rec = options?.proof?.recipientName?.trim() ?? '';
+        if (rec.length < 2) {
+          showToast('Le nom du réceptionnaire est obligatoire pour confirmer la livraison.', 'red');
+          return false;
+        }
+        if (
+          target.paymentMode === 'cod' &&
+          target.codAmount > 0 &&
+          !options?.proof?.codCollectedConfirmed
+        ) {
+          showToast('Veuillez confirmer l’encaissement COD avant de clôturer.', 'red');
+          return false;
+        }
+      }
+
+      if (nextStatus === 'FAILED') {
+        const reason = options?.failureReason?.trim() ?? '';
+        if (reason.length < 3) {
+          showToast('Un motif d’échec détaillé est obligatoire.', 'red');
+          return false;
+        }
+      }
+
+      const nowIso = new Date().toISOString();
+      const statusLabel = MISSION_STATUS_META[nextStatus].label;
+
+      let eventLabel = `Statut passé à : ${statusLabel}`;
+      if (nextStatus === 'DELIVERED' && options?.proof) {
+        eventLabel = `Livraison confirmée — remis à ${options.proof.recipientName.trim()}`;
+      } else if (nextStatus === 'FAILED' && options?.failureReason) {
+        eventLabel = `Échec signalé : ${options.failureReason.trim()}`;
+      }
+
+      // 1. Mode démonstration local : strictement en mémoire, aucun appel réseau
+      if (mode === 'demo') {
+        const newEvent: MissionEvent = {
+          status: nextStatus,
+          label: eventLabel.slice(0, 200),
+          timestampIso: nowIso,
+          actor: 'courier',
+          ...(options?.proof?.proofNote?.trim()
+            ? { note: options.proof.proofNote.trim().slice(0, 300) }
+            : {}),
+        };
+        setMissions((prev) =>
+          prev.map((m) =>
+            m.missionId === missionId
+              ? {
+                  ...m,
+                  status: nextStatus,
+                  events: [...m.events, newEvent].slice(-20),
+                  recipientName: options?.proof?.recipientName?.trim() || m.recipientName,
+                  proofCode: options?.proof?.proofCode?.trim() || m.proofCode,
+                  proofNote: options?.proof?.proofNote?.trim() || m.proofNote,
+                  failureReason: options?.failureReason?.trim() || m.failureReason,
+                  updatedAtIso: nowIso,
+                }
+              : m
+          )
+        );
+        if (nextStatus === 'DELIVERED') {
+          setNotifications((prev) => [
+            {
+              notificationId: `ntf_demo_${Date.now()}`,
+              courierId: target.courierId,
+              dataSource: 'local_demo',
+              category: 'confirmation',
+              title: `Livraison confirmée — ${target.orderNumber}`,
+              body: `Preuve enregistrée localement (mode démo) pour ${target.deliveryZone}.`,
+              missionId,
+              isRead: false,
+              createdAtIso: nowIso,
+            },
+            ...prev,
+          ]);
+        }
+        showToast(`${target.orderNumber} : ${statusLabel}.`, nextStatus === 'FAILED' ? 'red' : 'green');
+        return true;
+      }
+
+      // 2. Mode réel : TOUTES les transitions passent obligatoirement par l'Edge Function Supabase
+      if (mode !== 'firebase' || !firebaseUser || profile?.accountStatus !== 'active') {
+        showToast('Action refusée : autorisation livreur actif requise.', 'red');
+        return false;
+      }
+
+      if (!backendConnected) {
+        showToast(
+          'Les transitions réelles nécessitent la connexion aux Edge Functions Supabase (configurez VITE_SUPABASE_FUNCTIONS_URL).',
+          'yellow'
+        );
+        return false;
+      }
+
+      inFlightTransitionsRef.current.add(missionId);
+      try {
+        const idToken = await firebaseUser.getIdToken();
+        const res = await expressApi.submitDeliveryAction(idToken, {
+          deliveryId: missionId,
+          nextStatus,
+          label: eventLabel,
+          proof: options?.proof,
+          failureReason: options?.failureReason,
+        });
+
+        await refreshBackendData();
+        showToast(
+          res.idempotentReplay
+            ? `${target.orderNumber} : action déjà enregistrée.`
+            : `${target.orderNumber} : ${statusLabel}.`,
+          nextStatus === 'FAILED' ? 'red' : 'green'
+        );
+        return true;
+      } catch (err) {
+        showToast(
+          err instanceof ExpressApiError
+            ? err.message
+            : 'Erreur lors de la validation serveur de la mission.',
+          'red'
+        );
+        return false;
+      } finally {
+        inFlightTransitionsRef.current.delete(missionId);
+      }
+    },
+    [missions, mode, firebaseUser, profile, backendConnected, refreshBackendData, showToast]
+  );
+
+  const markNotificationRead = useCallback(
+    async (notificationId: string) => {
+      const target = notifications.find((n) => n.notificationId === notificationId);
+      if (!target || target.isRead) return;
+
+      if (mode === 'demo') {
+        const nowIso = new Date().toISOString();
+        setNotifications((prev) =>
+          prev.map((n) =>
+            n.notificationId === notificationId ? { ...n, isRead: true, readAtIso: nowIso } : n
+          )
+        );
+        return;
+      }
+
+      if (mode !== 'firebase' || !firebaseUser || profile?.accountStatus !== 'active') return;
+
+      if (backendConnected) {
+        try {
+          const idToken = await firebaseUser.getIdToken();
+          await expressApi.markNotificationRead(idToken, notificationId);
+          setNotifications((prev) =>
+            prev.map((n) =>
+              n.notificationId === notificationId
+                ? { ...n, isRead: true, readAtIso: new Date().toISOString() }
+                : n
+            )
+          );
+        } catch {
+          // silencieux pour ne pas interrompre la navigation vers la mission
+        }
+        return;
+      }
+
+      const path = `notifications/${notificationId}`;
+      try {
+        await updateDoc(doc(db, 'notifications', notificationId), {
+          isRead: true,
+          readAt: serverTimestamp(),
+        });
+      } catch (error) {
+        handleFirestoreError(error, OperationType.UPDATE, path);
+      }
+    },
+    [notifications, mode, firebaseUser, profile, backendConnected]
+  );
+
+  const markAllNotificationsRead = useCallback(async () => {
+    const unread = notifications.filter((n) => !n.isRead);
+    if (unread.length === 0) return;
+
+    if (mode === 'demo') {
+      const nowIso = new Date().toISOString();
+      setNotifications((prev) =>
+        prev.map((n) => (n.isRead ? n : { ...n, isRead: true, readAtIso: nowIso }))
+      );
+      showToast('Toutes les notifications sont marquées comme lues.', 'green');
+      return;
+    }
+
+    if (mode !== 'firebase' || !firebaseUser || profile?.accountStatus !== 'active') return;
+
+    if (backendConnected) {
+      try {
+        const idToken = await firebaseUser.getIdToken();
+        await expressApi.markAllNotificationsRead(idToken);
+        const nowIso = new Date().toISOString();
+        setNotifications((prev) =>
+          prev.map((n) => (n.isRead ? n : { ...n, isRead: true, readAtIso: nowIso }))
+        );
+        showToast('Toutes les notifications sont marquées comme lues.', 'green');
+      } catch (err) {
+        showToast(
+          err instanceof ExpressApiError ? err.message : 'Erreur lors de la mise à jour.',
+          'red'
+        );
+      }
+      return;
+    }
+
+    const batch = writeBatch(db);
+    unread.forEach((n) => {
+      batch.update(doc(db, 'notifications', n.notificationId), {
+        isRead: true,
+        readAt: serverTimestamp(),
+      });
+    });
+    try {
+      await batch.commit();
+      showToast('Toutes les notifications sont marquées comme lues.', 'green');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'notifications/batch-read');
+    }
+  }, [notifications, mode, firebaseUser, profile, backendConnected, showToast]);
+
+  const unreadCount = useMemo(
+    () => notifications.filter((n) => !n.isRead).length,
+    [notifications]
+  );
+
+  const value = useMemo<CourierAppContextValue>(
+    () => ({
+      mode,
+      backendConnected,
+      authReady,
+      loadingData,
+      firebaseUser,
+      isAdminUser,
+      profile,
+      missions,
+      notifications,
+      unreadCount,
+      authError,
+      toast,
+      dismissToast,
+      showToast,
+      signInWithGoogle,
+      enterDemoMode,
+      exitDemoMode,
+      logout,
+      refreshBackendData,
+      toggleAvailability,
+      updateProfile,
+      transitionMission,
+      markNotificationRead,
+      markAllNotificationsRead,
+    }),
+    [
+      mode,
+      backendConnected,
+      authReady,
+      loadingData,
+      firebaseUser,
+      isAdminUser,
+      profile,
+      missions,
+      notifications,
+      unreadCount,
+      authError,
+      toast,
+      dismissToast,
+      showToast,
+      signInWithGoogle,
+      enterDemoMode,
+      exitDemoMode,
+      logout,
+      refreshBackendData,
+      toggleAvailability,
+      updateProfile,
+      transitionMission,
+      markNotificationRead,
+      markAllNotificationsRead,
+    ]
+  );
+
+  return <CourierAppContext.Provider value={value}>{children}</CourierAppContext.Provider>;
+}
+
+export function useCourierApp(): CourierAppContextValue {
+  const ctx = useContext(CourierAppContext);
+  if (!ctx) {
+    throw new Error('useCourierApp doit être utilisé dans CourierAppProvider.');
+  }
+  return ctx;
+}

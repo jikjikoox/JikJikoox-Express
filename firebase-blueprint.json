@@ -1,0 +1,431 @@
+{
+  "entities": {
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Registre serveur-only des administrateurs JikJikoox autorisés (jamais modifiable côté client).",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "grantedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "active", "grantedAt"]
+    },
+    "CourierProfile": {
+      "title": "CourierProfile",
+      "description": "Profil opérationnel privé d'un livreur JikJikoox Express (équivalent drivers/profiles).",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "firstName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "lastName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 160
+        },
+        "phone": {
+          "type": "string",
+          "minLength": 7,
+          "maxLength": 24
+        },
+        "photoUrl": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "vehicleType": {
+          "type": "string",
+          "enum": ["moto", "scooter", "voiture", "velo", "tricycle"]
+        },
+        "vehiclePlate": {
+          "type": "string",
+          "maxLength": 24
+        },
+        "workZone": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 80
+        },
+        "isAvailable": {
+          "type": "boolean"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["courier"]
+        },
+        "accountStatus": {
+          "type": "string",
+          "enum": ["pending", "active", "suspended", "disabled"]
+        },
+        "notificationsEnabled": {
+          "type": "boolean"
+        },
+        "pushSoundEnabled": {
+          "type": "boolean"
+        },
+        "fcmTokenStatus": {
+          "type": "string",
+          "enum": ["unregistered", "pending", "registered"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "uid",
+        "firstName",
+        "lastName",
+        "email",
+        "phone",
+        "vehicleType",
+        "workZone",
+        "isAvailable",
+        "role",
+        "accountStatus",
+        "notificationsEnabled",
+        "pushSoundEnabled",
+        "fcmTokenStatus",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "DeliveryMission": {
+      "title": "DeliveryMission",
+      "description": "Miroir opérationnel Firestore d'une mission de livraison issue de Supabase (équivalent deliveries).",
+      "type": "object",
+      "properties": {
+        "missionId": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "orderNumber": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 40
+        },
+        "courierId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "dataSource": {
+          "type": "string",
+          "enum": ["supabase_sync"]
+        },
+        "customerName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 100
+        },
+        "customerPhone": {
+          "type": "string",
+          "minLength": 7,
+          "maxLength": 24
+        },
+        "deliveryAddress": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 240
+        },
+        "deliveryZone": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 80
+        },
+        "pickupName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        "pickupAddress": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 240
+        },
+        "gpsLat": { "type": "number" },
+        "gpsLng": { "type": "number" },
+        "itemsSummary": {
+          "type": "array",
+          "description": "Liste bornée des articles à livrer (max 25 lignes, immutable côté livreur)."
+        },
+        "itemCount": { "type": "number" },
+        "paymentMode": {
+          "type": "string",
+          "enum": ["cod", "prepaid"]
+        },
+        "codAmount": { "type": "number" },
+        "estimatedFee": { "type": "number" },
+        "instructions": {
+          "type": "string",
+          "maxLength": 400
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "ASSIGNED",
+            "ACCEPTED",
+            "PREPARING",
+            "PICKED_UP",
+            "IN_TRANSIT",
+            "ARRIVED",
+            "DELIVERED",
+            "FAILED",
+            "RETURN_REQUIRED",
+            "CANCELLED"
+          ]
+        },
+        "proofCode": { "type": "string", "maxLength": 32 },
+        "proofNote": { "type": "string", "maxLength": 300 },
+        "recipientName": { "type": "string", "maxLength": 100 },
+        "failureReason": { "type": "string", "maxLength": 240 },
+        "events": {
+          "type": "array",
+          "description": "Résumé chronologique append-only (max 20 événements)."
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "missionId",
+        "orderNumber",
+        "courierId",
+        "dataSource",
+        "customerName",
+        "customerPhone",
+        "deliveryAddress",
+        "deliveryZone",
+        "pickupName",
+        "pickupAddress",
+        "itemsSummary",
+        "itemCount",
+        "paymentMode",
+        "codAmount",
+        "estimatedFee",
+        "instructions",
+        "status",
+        "events",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "DeliveryEvent": {
+      "title": "DeliveryEvent",
+      "description": "Journal immuable (append-only) des transitions de statut d'une mission.",
+      "type": "object",
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "missionId": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "orderNumber": { "type": "string", "minLength": 3, "maxLength": 40 },
+        "courierId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "previousStatus": {
+          "type": "string",
+          "enum": [
+            "ASSIGNED",
+            "ACCEPTED",
+            "PREPARING",
+            "PICKED_UP",
+            "IN_TRANSIT",
+            "ARRIVED",
+            "DELIVERED",
+            "FAILED",
+            "RETURN_REQUIRED",
+            "CANCELLED"
+          ]
+        },
+        "nextStatus": {
+          "type": "string",
+          "enum": [
+            "ASSIGNED",
+            "ACCEPTED",
+            "PREPARING",
+            "PICKED_UP",
+            "IN_TRANSIT",
+            "ARRIVED",
+            "DELIVERED",
+            "FAILED",
+            "RETURN_REQUIRED",
+            "CANCELLED"
+          ]
+        },
+        "label": { "type": "string", "minLength": 2, "maxLength": 200 },
+        "note": { "type": "string", "maxLength": 300 },
+        "actor": { "type": "string", "enum": ["courier", "system", "admin"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "eventId",
+        "missionId",
+        "orderNumber",
+        "courierId",
+        "previousStatus",
+        "nextStatus",
+        "label",
+        "actor",
+        "createdAt"
+      ]
+    },
+    "DeliveryProof": {
+      "title": "DeliveryProof",
+      "description": "Preuve de livraison immuable (aucune modification ni suppression possible).",
+      "type": "object",
+      "properties": {
+        "proofId": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "missionId": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "orderNumber": { "type": "string", "minLength": 3, "maxLength": 40 },
+        "courierId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "recipientName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "proofCode": { "type": "string", "maxLength": 32 },
+        "proofNote": { "type": "string", "maxLength": 300 },
+        "codCollectedConfirmed": { "type": "boolean" },
+        "storagePath": { "type": "string", "maxLength": 300 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "proofId",
+        "missionId",
+        "orderNumber",
+        "courierId",
+        "recipientName",
+        "codCollectedConfirmed",
+        "createdAt"
+      ]
+    },
+    "CourierNotification": {
+      "title": "CourierNotification",
+      "description": "Notification opérationnelle reçue par le livreur (historique FCM / affectations).",
+      "type": "object",
+      "properties": {
+        "notificationId": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "courierId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "dataSource": {
+          "type": "string",
+          "enum": ["supabase_sync"]
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "assignment",
+            "modification",
+            "cancellation",
+            "instruction",
+            "operational",
+            "confirmation"
+          ]
+        },
+        "title": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "body": { "type": "string", "minLength": 2, "maxLength": 400 },
+        "missionId": { "type": "string", "maxLength": 64 },
+        "isRead": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "readAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "notificationId",
+        "courierId",
+        "dataSource",
+        "category",
+        "title",
+        "body",
+        "isRead",
+        "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/admins/{adminUid}": {
+      "schema": { "$ref": "#/entities/AdminRecord" },
+      "description": "Registre serveur-only des administrateurs autorisés."
+    },
+    "/couriers/{courierId}": {
+      "schema": { "$ref": "#/entities/CourierProfile" },
+      "description": "Profil privé, statut d'autorisation et paramètres opérationnels du livreur."
+    },
+    "/missions/{missionId}": {
+      "schema": { "$ref": "#/entities/DeliveryMission" },
+      "description": "Miroir opérationnel des missions réelles issues de Supabase (aucune donnée démo)."
+    },
+    "/delivery_events/{eventId}": {
+      "schema": { "$ref": "#/entities/DeliveryEvent" },
+      "description": "Journal immuable d'audit des transitions de livraison."
+    },
+    "/delivery_proofs/{proofId}": {
+      "schema": { "$ref": "#/entities/DeliveryProof" },
+      "description": "Preuves de livraison immuables associées aux missions livrées."
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/CourierNotification" },
+      "description": "Historique des notifications opérationnelles du livreur."
+    }
+  }
+}

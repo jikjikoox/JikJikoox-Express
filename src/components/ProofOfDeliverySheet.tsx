@@ -1,0 +1,274 @@
+import React, { useState } from 'react';
+import { AlertTriangle, Banknote, CheckCircle2, X } from 'lucide-react';
+import { FAILURE_REASONS, formatFcfa } from '../lib/missionWorkflow';
+import type { DeliveryMission, ProofSubmission } from '../types/delivery';
+
+interface ProofOfDeliverySheetProps {
+  mission: DeliveryMission;
+  sheetMode: 'proof' | 'failure';
+  onClose: () => void;
+  onConfirmDelivery: (proof: ProofSubmission) => Promise<void>;
+  onConfirmFailure: (reason: string) => Promise<void>;
+}
+
+export function ProofOfDeliverySheet({
+  mission,
+  sheetMode,
+  onClose,
+  onConfirmDelivery,
+  onConfirmFailure,
+}: ProofOfDeliverySheetProps) {
+  const isCod = mission.paymentMode === 'cod' && mission.codAmount > 0;
+
+  const [recipientName, setRecipientName] = useState(mission.customerName);
+  const [proofCode, setProofCode] = useState('');
+  const [proofNote, setProofNote] = useState('');
+  const [codConfirmed, setCodConfirmed] = useState(!isCod);
+
+  const [selectedReason, setSelectedReason] = useState(FAILURE_REASONS[0]);
+  const [customReason, setCustomReason] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleProofSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!recipientName.trim() || (isCod && !codConfirmed)) return;
+    setSubmitting(true);
+    try {
+      await onConfirmDelivery({
+        recipientName: recipientName.trim(),
+        proofCode: proofCode.trim() || undefined,
+        proofNote: proofNote.trim() || undefined,
+        codCollectedConfirmed: codConfirmed,
+      });
+      onClose();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleFailureSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const finalReason = customReason.trim()
+      ? `${selectedReason} — ${customReason.trim()}`
+      : selectedReason;
+    setSubmitting(true);
+    try {
+      await onConfirmFailure(finalReason.slice(0, 240));
+      onClose();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-[#111915]/50 backdrop-blur-[2px] p-0 sm:p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="sheet-title"
+    >
+      <div className="w-full sm:max-w-lg bg-white rounded-t-3xl sm:rounded-2xl border border-[#E4EAE6] max-h-[90vh] overflow-y-auto">
+        {/* Grab handle on mobile */}
+        <div className="sm:hidden pt-3 pb-1 flex justify-center">
+          <div className="w-10 h-1.5 rounded-full bg-[#D5DDD8]" />
+        </div>
+
+        <div className="px-5 pt-4 pb-3 border-b border-[#E4EAE6] flex items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-mono text-[#586860] tabular-nums">{mission.orderNumber}</p>
+            <h2 id="sheet-title" className="text-lg font-bold text-[#111915]">
+              {sheetMode === 'proof'
+                ? 'Confirmer la livraison'
+                : 'Signaler un échec de livraison'}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Fermer"
+            className="min-w-[44px] min-h-[44px] rounded-xl flex items-center justify-center text-[#586860] hover:bg-[#F6F7F6] transition-colors cursor-pointer"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {sheetMode === 'proof' ? (
+          <form onSubmit={handleProofSubmit} className="p-5 space-y-4">
+            {isCod && (
+              <div className="rounded-xl bg-[#FEF7E0] border border-[#E5A400]/30 p-4">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#7A5600]">
+                    <Banknote className="w-4 h-4" aria-hidden="true" />
+                    Encaissement obligatoire
+                  </span>
+                  <span className="font-mono text-base font-bold text-[#111915] tabular-nums">
+                    {formatFcfa(mission.codAmount)}
+                  </span>
+                </div>
+                <label className="flex items-start gap-3 cursor-pointer mt-2">
+                  <input
+                    type="checkbox"
+                    checked={codConfirmed}
+                    onChange={(e) => setCodConfirmed(e.target.checked)}
+                    className="mt-0.5 w-5 h-5 rounded accent-[#0F6B3E] shrink-0"
+                  />
+                  <span className="text-sm text-[#111915] leading-snug">
+                    Je confirme avoir encaissé exactement{' '}
+                    <strong className="font-mono tabular-nums">
+                      {formatFcfa(mission.codAmount)}
+                    </strong>{' '}
+                    auprès du client.
+                  </span>
+                </label>
+              </div>
+            )}
+
+            <div>
+              <label
+                htmlFor="recipientName"
+                className="block text-sm font-semibold text-[#111915] mb-1.5"
+              >
+                Nom du réceptionnaire
+              </label>
+              <input
+                id="recipientName"
+                type="text"
+                required
+                maxLength={100}
+                value={recipientName}
+                onChange={(e) => setRecipientName(e.target.value)}
+                placeholder="Ex. Aïssatou Ndiaye ou Gardien"
+                className="w-full min-h-[46px] px-3.5 rounded-xl border border-[#D5DDD8] bg-white text-[#111915] text-sm focus:outline-none focus:border-[#0F6B3E] focus:ring-2 focus:ring-[#0F6B3E]/15"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="proofCode"
+                className="block text-sm font-semibold text-[#111915] mb-1.5"
+              >
+                Code de remise client <span className="font-normal text-[#586860]">(optionnel)</span>
+              </label>
+              <input
+                id="proofCode"
+                type="text"
+                inputMode="numeric"
+                maxLength={12}
+                value={proofCode}
+                onChange={(e) => setProofCode(e.target.value)}
+                placeholder="Ex. 4829"
+                className="w-full min-h-[46px] px-3.5 rounded-xl border border-[#D5DDD8] bg-white font-mono text-[#111915] text-sm tracking-wider focus:outline-none focus:border-[#0F6B3E] focus:ring-2 focus:ring-[#0F6B3E]/15"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="proofNote"
+                className="block text-sm font-semibold text-[#111915] mb-1.5"
+              >
+                Observation terrain <span className="font-normal text-[#586860]">(optionnel)</span>
+              </label>
+              <textarea
+                id="proofNote"
+                rows={2}
+                maxLength={300}
+                value={proofNote}
+                onChange={(e) => setProofNote(e.target.value)}
+                placeholder="Ex. Remis à l’accueil de l’immeuble, colis intact."
+                className="w-full px-3.5 py-2.5 rounded-xl border border-[#D5DDD8] bg-white text-[#111915] text-sm focus:outline-none focus:border-[#0F6B3E] focus:ring-2 focus:ring-[#0F6B3E]/15 resize-none"
+              />
+            </div>
+
+            <div className="pt-2 flex flex-col sm:flex-row gap-2.5 pb-safe">
+              <button
+                type="button"
+                onClick={onClose}
+                className="sm:w-1/3 min-h-[48px] px-4 rounded-xl border border-[#D5DDD8] text-[#111915] font-semibold text-sm hover:bg-[#F6F7F6] transition-colors cursor-pointer"
+              >
+                Annuler
+              </button>
+              <button
+                type="submit"
+                disabled={submitting || !recipientName.trim() || (isCod && !codConfirmed)}
+                className="sm:flex-1 min-h-[48px] px-4 rounded-xl bg-[#0F6B3E] hover:bg-[#0A5230] disabled:opacity-50 text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer"
+              >
+                <CheckCircle2 className="w-4 h-4" aria-hidden="true" />
+                {submitting ? 'Enregistrement...' : 'Valider la livraison'}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <form onSubmit={handleFailureSubmit} className="p-5 space-y-4">
+            <div className="rounded-xl bg-[#FDF0F0] border border-[#C82829]/20 p-3.5 flex items-start gap-2.5 text-sm text-[#8F1D1E]">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
+              <span>
+                Un échec de livraison est transmis à JikJikoox Admin pour suivi client et éventuel
+                retour au point relais.
+              </span>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-[#111915]">Motif principal</p>
+              {FAILURE_REASONS.map((reason) => (
+                <label
+                  key={reason}
+                  className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
+                    selectedReason === reason
+                      ? 'border-[#C82829] bg-[#FDF0F0]/50'
+                      : 'border-[#E4EAE6] hover:bg-[#F6F7F6]'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="failureReason"
+                    value={reason}
+                    checked={selectedReason === reason}
+                    onChange={() => setSelectedReason(reason)}
+                    className="w-4 h-4 accent-[#C82829]"
+                  />
+                  <span className="text-sm text-[#111915]">{reason}</span>
+                </label>
+              ))}
+            </div>
+
+            <div>
+              <label
+                htmlFor="customReason"
+                className="block text-sm font-semibold text-[#111915] mb-1.5"
+              >
+                Précision complémentaire <span className="font-normal text-[#586860]">(optionnel)</span>
+              </label>
+              <input
+                id="customReason"
+                type="text"
+                maxLength={140}
+                value={customReason}
+                onChange={(e) => setCustomReason(e.target.value)}
+                placeholder="Ex. Client a demandé une reprogrammation demain matin"
+                className="w-full min-h-[46px] px-3.5 rounded-xl border border-[#D5DDD8] bg-white text-[#111915] text-sm focus:outline-none focus:border-[#C82829] focus:ring-2 focus:ring-[#C82829]/15"
+              />
+            </div>
+
+            <div className="pt-2 flex flex-col sm:flex-row gap-2.5 pb-safe">
+              <button
+                type="button"
+                onClick={onClose}
+                className="sm:w-1/3 min-h-[48px] px-4 rounded-xl border border-[#D5DDD8] text-[#111915] font-semibold text-sm hover:bg-[#F6F7F6] transition-colors cursor-pointer"
+              >
+                Annuler
+              </button>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="sm:flex-1 min-h-[48px] px-4 rounded-xl bg-[#C82829] hover:bg-[#A61F20] disabled:opacity-50 text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer"
+              >
+                <AlertTriangle className="w-4 h-4" aria-hidden="true" />
+                {submitting ? 'Transmission...' : 'Confirmer l’échec'}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}

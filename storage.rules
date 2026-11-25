@@ -1,0 +1,66 @@
+rules_version = '2';
+
+// Règles Firebase Storage — JikJikoox Express (Preuves de livraison photo)
+// Aucun dossier public : accès strictement privé, immuable, contrôlé par UID livreur.
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Refus global par défaut
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+
+    function isVerifiedSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidProofImage() {
+      return request.resource != null
+        && request.resource.size > 0
+        && request.resource.size <= 5 * 1024 * 1024
+        && request.resource.contentType in ['image/jpeg', 'image/png', 'image/webp'];
+    }
+
+    // Preuves photo de livraison : /delivery_proofs/{courierId}/{missionId}/{fileName}
+    // Note : en production, la vérification croisée du statut actif et de l'attribution
+    // de la mission est renforcée par signed upload URL via Edge Function Supabase.
+    match /delivery_proofs/{courierId}/{missionId}/{fileName} {
+      allow read: if isVerifiedSignedIn()
+        && isValidId(courierId)
+        && isValidId(missionId)
+        && request.auth.uid == courierId;
+
+      allow create: if isVerifiedSignedIn()
+        && isValidId(courierId)
+        && isValidId(missionId)
+        && request.auth.uid == courierId
+        && fileName.matches('^[a-zA-Z0-9_\\-]+\\.(jpg|jpeg|png|webp)$')
+        && isValidProofImage();
+
+      // Immuabilité stricte : aucune modification ni suppression rétroactive d'une preuve
+      allow update, delete: if false;
+    }
+
+    // Photos de profil livreur : /courier_avatars/{courierId}/{fileName}
+    match /courier_avatars/{courierId}/{fileName} {
+      allow read: if isVerifiedSignedIn()
+        && isValidId(courierId)
+        && request.auth.uid == courierId;
+
+      allow create, update: if isVerifiedSignedIn()
+        && isValidId(courierId)
+        && request.auth.uid == courierId
+        && fileName.matches('^[a-zA-Z0-9_\\-]+\\.(jpg|jpeg|png|webp)$')
+        && request.resource != null
+        && request.resource.size > 0
+        && request.resource.size <= 2 * 1024 * 1024
+        && request.resource.contentType in ['image/jpeg', 'image/png', 'image/webp'];
+
+      allow delete: if false;
+    }
+  }
+}

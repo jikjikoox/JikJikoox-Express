@@ -1,0 +1,403 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // =========================================================================
+    // Filet de sécurité global — Refus par défaut sur toute la base
+    // =========================================================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // =========================================================================
+    // Primitives durcies (Zero-Trust, sans email admin codé en dur)
+    // =========================================================================
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedSignedIn() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // Rôle admin exclusivement issu d'une collection serveur-only /admins/{uid}
+    function isAdmin() {
+      return isVerifiedSignedIn()
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+        && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.active == true;
+    }
+
+    // Vérification stricte côté serveur que le livreur est actif et autorisé
+    function isActiveCourier() {
+      return isVerifiedSignedIn()
+        && exists(/databases/$(database)/documents/couriers/$(request.auth.uid))
+        && get(/databases/$(database)/documents/couriers/$(request.auth.uid)).data.role == 'courier'
+        && get(/databases/$(database)/documents/couriers/$(request.auth.uid)).data.accountStatus == 'active';
+    }
+
+    function isNonEmptyString(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    function isOptionalString(data, key, maxLen) {
+      return !(key in data) || (data[key] is string && data[key].size() <= maxLen);
+    }
+
+    function isOptionalPhotoUrl(data) {
+      return !('photoUrl' in data)
+        || (data.photoUrl is string
+            && data.photoUrl.size() <= 500
+            && (data.photoUrl.matches('^https://.*') || data.photoUrl.matches('^/src/assets/.*')));
+    }
+
+    // =========================================================================
+    // Blueprints de validation (Anti-Update-Gap)
+    // =========================================================================
+    function isValidCourier(data, courierId) {
+      return data.keys().hasAll([
+        'uid', 'firstName', 'lastName', 'email', 'phone', 'vehicleType',
+        'workZone', 'isAvailable', 'role', 'accountStatus',
+        'notificationsEnabled', 'pushSoundEnabled', 'fcmTokenStatus',
+        'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'uid', 'firstName', 'lastName', 'email', 'phone', 'photoUrl',
+        'vehicleType', 'vehiclePlate', 'workZone', 'isAvailable', 'role',
+        'accountStatus', 'notificationsEnabled', 'pushSoundEnabled',
+        'fcmTokenStatus', 'createdAt', 'updatedAt'
+      ]) &&
+      isValidId(data.uid) &&
+      data.uid == courierId &&
+      isNonEmptyString(data.firstName, 1, 60) &&
+      isNonEmptyString(data.lastName, 1, 60) &&
+      isNonEmptyString(data.email, 3, 160) &&
+      isNonEmptyString(data.phone, 7, 24) &&
+      isOptionalPhotoUrl(data) &&
+      isOptionalString(data, 'vehiclePlate', 24) &&
+      data.vehicleType in ['moto', 'scooter', 'voiture', 'velo', 'tricycle'] &&
+      isNonEmptyString(data.workZone, 2, 80) &&
+      data.isAvailable is bool &&
+      data.role == 'courier' &&
+      data.accountStatus in ['pending', 'active', 'suspended', 'disabled'] &&
+      data.notificationsEnabled is bool &&
+      data.pushSoundEnabled is bool &&
+      data.fcmTokenStatus in ['unregistered', 'pending', 'registered'] &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    function isValidMissionStatus(status) {
+      return status in [
+        'ASSIGNED', 'ACCEPTED', 'PREPARING', 'PICKED_UP', 'IN_TRANSIT',
+        'ARRIVED', 'DELIVERED', 'REFUSED', 'FAILED', 'RETURN_REQUIRED',
+        'RETURNED', 'CANCELLED'
+      ];
+    }
+
+    function isValidMission(data, missionId) {
+      return data.keys().hasAll([
+        'missionId', 'orderNumber', 'courierId', 'dataSource', 'customerName',
+        'customerPhone', 'deliveryAddress', 'deliveryZone', 'pickupName',
+        'pickupAddress', 'itemsSummary', 'itemCount', 'paymentMode',
+        'codAmount', 'estimatedFee', 'instructions', 'status', 'events',
+        'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'missionId', 'deliveryId', 'orderId', 'orderNumber', 'courierId', 'driverId',
+        'dataSource', 'customerName', 'customerPhone', 'deliveryAddress', 'deliveryZone',
+        'pickupName', 'pickupAddress', 'gpsLat', 'gpsLng', 'itemsSummary', 'itemCount',
+        'paymentMode', 'codAmount', 'estimatedFee', 'instructions', 'status',
+        'proofCode', 'proofNote', 'recipientName', 'failureReason', 'events',
+        'assignedAt', 'createdAt', 'updatedAt'
+      ]) &&
+      isValidId(data.missionId) &&
+      data.missionId == missionId &&
+      isNonEmptyString(data.orderNumber, 3, 40) &&
+      isValidId(data.courierId) &&
+      data.dataSource == 'supabase_sync' &&
+      isNonEmptyString(data.customerName, 2, 100) &&
+      isNonEmptyString(data.customerPhone, 7, 24) &&
+      isNonEmptyString(data.deliveryAddress, 4, 240) &&
+      isNonEmptyString(data.deliveryZone, 2, 80) &&
+      isNonEmptyString(data.pickupName, 2, 120) &&
+      isNonEmptyString(data.pickupAddress, 4, 240) &&
+      (!('gpsLat' in data) || (data.gpsLat is number && data.gpsLat >= -90 && data.gpsLat <= 90)) &&
+      (!('gpsLng' in data) || (data.gpsLng is number && data.gpsLng >= -180 && data.gpsLng <= 180)) &&
+      data.itemsSummary is list &&
+      data.itemsSummary.size() >= 1 &&
+      data.itemsSummary.size() <= 25 &&
+      data.itemsSummary[0] is map &&
+      data.itemCount is number && data.itemCount >= 1 && data.itemCount <= 500 &&
+      data.paymentMode in ['cod', 'prepaid'] &&
+      data.codAmount is number && data.codAmount >= 0 && data.codAmount <= 5000000 &&
+      data.estimatedFee is number && data.estimatedFee >= 0 && data.estimatedFee <= 200000 &&
+      data.instructions is string && data.instructions.size() <= 400 &&
+      isValidMissionStatus(data.status) &&
+      isOptionalString(data, 'proofCode', 32) &&
+      isOptionalString(data, 'proofNote', 300) &&
+      isOptionalString(data, 'recipientName', 100) &&
+      isOptionalString(data, 'failureReason', 240) &&
+      data.events is list &&
+      data.events.size() >= 1 &&
+      data.events.size() <= 20 &&
+      data.events[0] is map &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    function isValidDeliveryEvent(data, eventId) {
+      return data.keys().hasAll([
+        'eventId', 'missionId', 'orderNumber', 'courierId',
+        'previousStatus', 'nextStatus', 'label', 'actor', 'createdAt'
+      ]) &&
+      data.keys().hasOnly([
+        'eventId', 'missionId', 'orderNumber', 'courierId',
+        'previousStatus', 'nextStatus', 'label', 'note', 'actor', 'createdAt'
+      ]) &&
+      isValidId(data.eventId) &&
+      data.eventId == eventId &&
+      isValidId(data.missionId) &&
+      isNonEmptyString(data.orderNumber, 3, 40) &&
+      isValidId(data.courierId) &&
+      isValidMissionStatus(data.previousStatus) &&
+      isValidMissionStatus(data.nextStatus) &&
+      isNonEmptyString(data.label, 2, 200) &&
+      isOptionalString(data, 'note', 300) &&
+      data.actor in ['courier', 'system', 'admin'] &&
+      data.createdAt is timestamp;
+    }
+
+    function isValidDeliveryProof(data, proofId) {
+      return data.keys().hasAll([
+        'proofId', 'missionId', 'orderNumber', 'courierId',
+        'recipientName', 'codCollectedConfirmed', 'createdAt'
+      ]) &&
+      data.keys().hasOnly([
+        'proofId', 'missionId', 'orderNumber', 'courierId',
+        'recipientName', 'proofCode', 'proofNote',
+        'codCollectedConfirmed', 'storagePath', 'createdAt'
+      ]) &&
+      isValidId(data.proofId) &&
+      data.proofId == proofId &&
+      isValidId(data.missionId) &&
+      isNonEmptyString(data.orderNumber, 3, 40) &&
+      isValidId(data.courierId) &&
+      isNonEmptyString(data.recipientName, 2, 100) &&
+      isOptionalString(data, 'proofCode', 32) &&
+      isOptionalString(data, 'proofNote', 300) &&
+      data.codCollectedConfirmed is bool &&
+      isOptionalString(data, 'storagePath', 300) &&
+      data.createdAt is timestamp;
+    }
+
+    function isValidNotification(data, notificationId) {
+      return data.keys().hasAll([
+        'notificationId', 'courierId', 'dataSource', 'category',
+        'title', 'body', 'isRead', 'createdAt'
+      ]) &&
+      data.keys().hasOnly([
+        'notificationId', 'courierId', 'dataSource', 'category',
+        'title', 'body', 'missionId', 'isRead', 'createdAt', 'readAt'
+      ]) &&
+      isValidId(data.notificationId) &&
+      data.notificationId == notificationId &&
+      isValidId(data.courierId) &&
+      data.dataSource == 'supabase_sync' &&
+      data.category in ['assignment', 'modification', 'cancellation', 'instruction', 'operational', 'confirmation'] &&
+      isNonEmptyString(data.title, 2, 120) &&
+      isNonEmptyString(data.body, 2, 400) &&
+      isOptionalString(data, 'missionId', 64) &&
+      data.isRead is bool &&
+      data.createdAt is timestamp &&
+      (!('readAt' in data) || data.readAt is timestamp);
+    }
+
+    // =========================================================================
+    // Collection: /admins/{adminUid} (Serveur-only — jamais modifiable client)
+    // =========================================================================
+    match /admins/{adminUid} {
+      allow get: if isValidId(adminUid) && isVerifiedSignedIn() && isOwner(adminUid);
+      allow list, create, update, delete: if false;
+    }
+
+    // =========================================================================
+    // Collection: /couriers/{courierId} (Profils & autorisation livreurs)
+    // =========================================================================
+    match /couriers/{courierId} {
+      allow get: if isValidId(courierId) && (isOwner(courierId) || isAdmin());
+      allow list: if false;
+
+      allow create: if isVerifiedSignedIn() &&
+        isValidId(courierId) &&
+        isValidCourier(incoming(), courierId) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        (
+          isAdmin() ||
+          (
+            isOwner(courierId) &&
+            incoming().role == 'courier' &&
+            incoming().accountStatus == 'pending' &&
+            incoming().isAvailable == false &&
+            incoming().email == request.auth.token.email
+          )
+        );
+
+      allow update: if isVerifiedSignedIn() &&
+        isValidId(courierId) &&
+        isValidCourier(incoming(), courierId) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          isAdmin() ||
+          (
+            isOwner(courierId) &&
+            existing().role == 'courier' &&
+            existing().accountStatus == 'active' &&
+            incoming().role == existing().role &&
+            incoming().accountStatus == existing().accountStatus &&
+            incoming().email == existing().email &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'firstName', 'lastName', 'phone', 'photoUrl', 'vehicleType',
+              'vehiclePlate', 'workZone', 'isAvailable', 'notificationsEnabled',
+              'pushSoundEnabled', 'fcmTokenStatus', 'updatedAt'
+            ])
+          )
+        );
+
+      allow delete: if isValidId(courierId) && isAdmin();
+    }
+
+    // =========================================================================
+    // Collection: /missions/{missionId}
+    // MIROIR OPÉRATIONNEL LECTURE SEULE POUR LE LIVREUR :
+    // Toute transition passe exclusivement par Supabase Edge Functions (delivery-action)
+    // qui met à jour Supabase puis synchronise Firestore via compte de service backend.
+    // =========================================================================
+    match /missions/{missionId} {
+      allow get: if isValidId(missionId) && (
+        (isOwner(existing().courierId) && isActiveCourier()) ||
+        isAdmin()
+      );
+
+      allow list: if isVerifiedSignedIn()
+        && resource.data.courierId == request.auth.uid
+        && isActiveCourier();
+
+      allow create: if isValidId(missionId) &&
+        isValidMission(incoming(), missionId) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        isAdmin();
+
+      allow update: if isValidId(missionId) &&
+        isValidMission(incoming(), missionId) &&
+        incoming().missionId == existing().missionId &&
+        incoming().orderNumber == existing().orderNumber &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        isAdmin();
+
+      allow delete: if isValidId(missionId) && isAdmin();
+    }
+
+    // =========================================================================
+    // Collection: /delivery_events/{eventId} (Écrit exclusivement par le backend)
+    // =========================================================================
+    match /delivery_events/{eventId} {
+      allow get: if isValidId(eventId) && (
+        (isOwner(existing().courierId) && isActiveCourier()) ||
+        isAdmin()
+      );
+
+      allow list: if isVerifiedSignedIn()
+        && resource.data.courierId == request.auth.uid
+        && isActiveCourier();
+
+      allow create: if isValidId(eventId) &&
+        isValidDeliveryEvent(incoming(), eventId) &&
+        incoming().createdAt == request.time &&
+        isAdmin();
+
+      allow update, delete: if false;
+    }
+
+    // =========================================================================
+    // Collection: /delivery_proofs/{proofId} (Écrit exclusivement par le backend)
+    // =========================================================================
+    match /delivery_proofs/{proofId} {
+      allow get: if isValidId(proofId) && (
+        (isOwner(existing().courierId) && isActiveCourier()) ||
+        isAdmin()
+      );
+
+      allow list: if isVerifiedSignedIn()
+        && resource.data.courierId == request.auth.uid
+        && isActiveCourier();
+
+      allow create: if isValidId(proofId) &&
+        isValidDeliveryProof(incoming(), proofId) &&
+        incoming().createdAt == request.time &&
+        isAdmin();
+
+      allow update, delete: if false;
+    }
+
+    // =========================================================================
+    // Collection: /notifications/{notificationId}
+    // =========================================================================
+    match /notifications/{notificationId} {
+      allow get: if isValidId(notificationId) && (
+        (isOwner(existing().courierId) && isActiveCourier()) ||
+        isAdmin()
+      );
+
+      allow list: if isVerifiedSignedIn()
+        && resource.data.courierId == request.auth.uid
+        && isActiveCourier();
+
+      allow create: if isValidId(notificationId) &&
+        isValidNotification(incoming(), notificationId) &&
+        incoming().createdAt == request.time &&
+        isAdmin();
+
+      allow update: if isVerifiedSignedIn() &&
+        isValidId(notificationId) &&
+        isValidNotification(incoming(), notificationId) &&
+        incoming().notificationId == existing().notificationId &&
+        incoming().courierId == existing().courierId &&
+        incoming().dataSource == existing().dataSource &&
+        incoming().createdAt == existing().createdAt &&
+        (
+          isAdmin() ||
+          (
+            isOwner(existing().courierId) &&
+            isActiveCourier() &&
+            incoming().isRead == true &&
+            incoming().readAt == request.time &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['isRead', 'readAt'])
+          )
+        );
+
+      allow delete: if isValidId(notificationId) && isAdmin();
+    }
+  }
+}

@@ -1,0 +1,50 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --color-jkx-green: #0F6B3E;
+  --color-jkx-green-dark: #0A5230;
+  --color-jkx-green-soft: #ECF6F0;
+  --color-jkx-yellow: #E5A400;
+  --color-jkx-yellow-soft: #FEF7E0;
+  --color-jkx-red: #C82829;
+  --color-jkx-red-soft: #FDF0F0;
+  --color-jkx-ink: #111915;
+  --color-jkx-muted: #586860;
+  --color-jkx-border: #E4EAE6;
+  --color-jkx-canvas: #F6F7F6;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    color: var(--color-jkx-ink);
+    background-color: var(--color-jkx-canvas);
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+    text-wrap: balance;
+  }
+}
+
+.pb-safe {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
