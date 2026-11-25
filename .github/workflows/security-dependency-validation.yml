@@ -4,12 +4,6 @@ on:
   pull_request:
     branches:
       - main
-    paths:
-      - "package.json"
-      - "bun.lock"
-      - "src/**"
-      - "tests/**"
-      - ".github/workflows/security-dependency-validation.yml"
   push:
     branches:
       - "fix/grpc-js-cve-2026-101916"
@@ -30,8 +24,12 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Install dependencies from lockfile
-        run: bun install --frozen-lockfile
+      - name: Resolve dependencies and report lockfile changes
+        run: |
+          bun install
+          echo "::group::Generated bun.lock diff"
+          git diff -- bun.lock
+          echo "::endgroup::"
 
       - name: TypeScript validation
         run: bun run lint
@@ -44,4 +42,7 @@ jobs:
 
       - name: Confirm patched gRPC version
         run: |
-          bun -e 'const p = await Bun.resolve(" @grpc/grpc-js/package.json".trim()); const v = (await import(p)).default.version; console.log("@grpc/grpc-js", v); if (!["1.13.6", "1.14.5"].includes(v)) process.exit(1)'
+          node -e 'const fs=require("node:fs");const path=require("node:path");let d=path.dirname(require.resolve("@grpc/grpc-js"));while(!fs.existsSync(path.join(d,"package.json"))){const parent=path.dirname(d);if(parent===d)throw new Error("grpc-js package.json not found");d=parent;}const v=JSON.parse(fs.readFileSync(path.join(d,"package.json"),"utf8")).version;console.log("@grpc/grpc-js",v);if(v!=="1.14.7")process.exit(1)'
+
+      - name: Ensure lockfile is committed
+        run: git diff --exit-code -- bun.lock
