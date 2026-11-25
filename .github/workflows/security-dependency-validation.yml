@@ -1,0 +1,47 @@
+name: Security dependency validation
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "package.json"
+      - "bun.lock"
+      - "src/**"
+      - "tests/**"
+      - ".github/workflows/security-dependency-validation.yml"
+  push:
+    branches:
+      - "fix/grpc-js-cve-2026-101916"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Install, typecheck, build and security tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies from lockfile
+        run: bun install --frozen-lockfile
+
+      - name: TypeScript validation
+        run: bun run lint
+
+      - name: Production build
+        run: bun run build
+
+      - name: Security logic tests
+        run: bun run test:security
+
+      - name: Confirm patched gRPC version
+        run: |
+          bun -e 'const p = await Bun.resolve(" @grpc/grpc-js/package.json".trim()); const v = (await import(p)).default.version; console.log("@grpc/grpc-js", v); if (!["1.13.6", "1.14.5"].includes(v)) process.exit(1)'
