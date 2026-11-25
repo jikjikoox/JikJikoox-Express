@@ -9,6 +9,7 @@ import {
   Power,
   Truck,
 } from 'lucide-react';
+import { BrandAccentBar } from '../components/BrandLogo';
 import { MissionCard } from '../components/MissionCard';
 import { useCourierApp } from '../context/CourierAppContext';
 import {
@@ -84,56 +85,59 @@ export function DashboardPage({ onSelectMission, onNavigateTab }: DashboardPageP
   return (
     <div className="space-y-6">
       {/* Top Greeting & Availability Hero Row */}
-      <section className="bg-white border border-[#E4EAE6] rounded-2xl p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <p className="text-xs font-medium text-[#586860] capitalize">
-            {todayFormatted} · {profile.workZone}
-          </p>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-[#111915] tracking-tight mt-1">
-            Bonjour, {profile.firstName}
-          </h1>
-          <p className="text-sm text-[#586860] mt-1">
-            {stats.activeCount > 0
-              ? `Vous avez ${stats.activeCount} livraison${stats.activeCount > 1 ? 's' : ''} active${stats.activeCount > 1 ? 's' : ''} aujourd’hui.`
-              : 'Aucune mission active pour le moment.'}
-          </p>
-        </div>
-
-        {/* Tactile Availability Switch */}
-        <button
-          type="button"
-          onClick={() => void toggleAvailability()}
-          className={`min-h-[54px] px-5 rounded-xl border font-semibold text-sm flex items-center justify-between sm:justify-center gap-3 transition-colors cursor-pointer shrink-0 ${
-            profile.isAvailable
-              ? 'bg-[#0F6B3E] hover:bg-[#0A5230] border-[#0F6B3E] text-white'
-              : 'bg-[#F6F7F6] hover:bg-[#EBEFED] border-[#D5DDD8] text-[#111915]'
-          }`}
-        >
-          <Power className="w-4 h-4 shrink-0" aria-hidden="true" />
-          <div className="text-left">
-            <div className="text-sm font-bold leading-tight">
-              {profile.isAvailable ? 'Disponible' : 'Indisponible'}
-            </div>
-            <div
-              className={`text-[11px] font-medium ${
-                profile.isAvailable ? 'text-white/80' : 'text-[#586860]'
-              }`}
-            >
-              {profile.isAvailable ? 'Prêt pour affectation' : 'Touchez pour reprendre'}
-            </div>
+      <section className="bg-white border border-[#E5E2D9] rounded-2xl overflow-hidden">
+        <BrandAccentBar className="h-[3px]" />
+        <div className="p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <p className="text-xs font-medium text-[#5A5851] capitalize">
+              {todayFormatted} · {profile.workZone}
+            </p>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-[#141413] tracking-tight mt-1">
+              Bonjour, {profile.firstName}
+            </h1>
+            <p className="text-sm text-[#5A5851] mt-1">
+              {stats.activeCount > 0
+                ? `Vous avez ${stats.activeCount} livraison${stats.activeCount > 1 ? 's' : ''} active${stats.activeCount > 1 ? 's' : ''} aujourd’hui.`
+                : 'Aucune mission active pour le moment.'}
+            </p>
           </div>
-        </button>
+
+          {/* Tactile Availability Switch */}
+          <button
+            type="button"
+            onClick={() => void toggleAvailability()}
+            className={`min-h-[54px] px-5 rounded-xl border font-semibold text-sm flex items-center justify-between sm:justify-center gap-3 transition-colors cursor-pointer shrink-0 ${
+              profile.isAvailable
+                ? 'bg-[#0E6E2D] hover:bg-[#095220] border-[#0E6E2D] text-white'
+                : 'bg-[#F7F6F2] hover:bg-[#EFECE4] border-[#D6D1C4] text-[#141413]'
+            }`}
+          >
+            <Power className="w-4 h-4 shrink-0" aria-hidden="true" />
+            <div className="text-left">
+              <div className="text-sm font-bold leading-tight">
+                {profile.isAvailable ? 'Disponible' : 'Indisponible'}
+              </div>
+              <div
+                className={`text-[11px] font-medium ${
+                  profile.isAvailable ? 'text-white/80' : 'text-[#5A5851]'
+                }`}
+              >
+                {profile.isAvailable ? 'Prêt pour affectation' : 'Touchez pour reprendre'}
+              </div>
+            </div>
+          </button>
+        </div>
       </section>
 
       {/* Firebase Active Courier Empty State — never writes fake missions to Firestore */}
       {mode === 'firebase' && !loadingData && missions.length === 0 && (
-        <section className="bg-[#FEF7E0] border border-[#E5A400]/35 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <section className="bg-[#FEF6E4] border border-[#F4A61D]/40 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="space-y-1">
-            <h2 className="text-base font-bold text-[#111915] flex items-center gap-2">
-              <Database className="w-4 h-4 text-[#7A5600]" aria-hidden="true" />
+            <h2 className="text-base font-bold text-[#141413] flex items-center gap-2">
+              <Database className="w-4 h-4 text-[#8A5600]" aria-hidden="true" />
               En attente d’affectations JikJikoox Admin
             </h2>
-            <p className="text-sm text-[#586860]">
+            <p className="text-sm text-[#5A5851]">
               Aucune mission réelle n’est encore affectée à votre compte. Pour tester l’interface
               sans écrire dans Firestore, utilisez l’aperçu démonstration local.
             </p>
@@ -141,7 +145,7 @@ export function DashboardPage({ onSelectMission, onNavigateTab }: DashboardPageP
           <button
             type="button"
             onClick={enterDemoMode}
-            className="min-h-[46px] px-4 rounded-xl bg-[#0F6B3E] hover:bg-[#0A5230] text-white font-semibold text-sm whitespace-nowrap shrink-0 cursor-pointer transition-colors"
+            className="min-h-[46px] px-4 rounded-xl bg-[#0E6E2D] hover:bg-[#095220] text-white font-semibold text-sm whitespace-nowrap shrink-0 cursor-pointer transition-colors"
           >
             Ouvrir l’aperçu démo local
           </button>
@@ -150,42 +154,42 @@ export function DashboardPage({ onSelectMission, onNavigateTab }: DashboardPageP
 
       {/* 4-Column KPI Strip */}
       <section aria-label="Indicateurs du jour" className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <div className="bg-white border border-[#E4EAE6] rounded-2xl p-4 sm:p-5">
-          <p className="text-xs font-medium text-[#586860]">Livraisons du jour</p>
-          <p className="mt-2 font-mono text-2xl sm:text-3xl font-bold text-[#111915] tabular-nums">
+        <div className="bg-white border border-[#E5E2D9] rounded-2xl p-4 sm:p-5">
+          <p className="text-xs font-medium text-[#5A5851]">Livraisons du jour</p>
+          <p className="mt-2 font-mono text-2xl sm:text-3xl font-bold text-[#141413] tabular-nums">
             {stats.totalToday}
           </p>
-          <p className="mt-1 text-xs text-[#586860] tabular-nums">
+          <p className="mt-1 text-xs text-[#5A5851] tabular-nums">
             {stats.awaitingAcceptCount > 0
               ? `${stats.awaitingAcceptCount} à accepter`
               : 'Toutes prises en charge'}
           </p>
         </div>
 
-        <div className="bg-white border border-[#E4EAE6] rounded-2xl p-4 sm:p-5">
-          <p className="text-xs font-medium text-[#586860]">En cours</p>
-          <p className="mt-2 font-mono text-2xl sm:text-3xl font-bold text-[#0F6B3E] tabular-nums">
+        <div className="bg-white border border-[#E5E2D9] rounded-2xl p-4 sm:p-5">
+          <p className="text-xs font-medium text-[#5A5851]">En cours</p>
+          <p className="mt-2 font-mono text-2xl sm:text-3xl font-bold text-[#0E6E2D] tabular-nums">
             {stats.activeCount}
           </p>
-          <p className="mt-1 text-xs text-[#586860] tabular-nums">
+          <p className="mt-1 text-xs text-[#5A5851] tabular-nums">
             {stats.pendingCod > 0 ? `COD : ${formatFcfa(stats.pendingCod)}` : 'Aucun COD en attente'}
           </p>
         </div>
 
-        <div className="bg-white border border-[#E4EAE6] rounded-2xl p-4 sm:p-5">
-          <p className="text-xs font-medium text-[#586860]">Terminées</p>
-          <p className="mt-2 font-mono text-2xl sm:text-3xl font-bold text-[#111915] tabular-nums">
+        <div className="bg-white border border-[#E5E2D9] rounded-2xl p-4 sm:p-5">
+          <p className="text-xs font-medium text-[#5A5851]">Terminées</p>
+          <p className="mt-2 font-mono text-2xl sm:text-3xl font-bold text-[#141413] tabular-nums">
             {stats.deliveredCount}
           </p>
-          <p className="mt-1 text-xs text-[#0F6B3E] font-medium">Livrées avec preuve</p>
+          <p className="mt-1 text-xs text-[#0E6E2D] font-medium">Livrées avec preuve</p>
         </div>
 
-        <div className="bg-white border border-[#E4EAE6] rounded-2xl p-4 sm:p-5">
-          <p className="text-xs font-medium text-[#586860]">Rémunération estimée</p>
-          <p className="mt-2 font-mono text-xl sm:text-2xl font-bold text-[#111915] tabular-nums">
+        <div className="bg-white border border-[#E5E2D9] rounded-2xl p-4 sm:p-5">
+          <p className="text-xs font-medium text-[#5A5851]">Rémunération estimée</p>
+          <p className="mt-2 font-mono text-xl sm:text-2xl font-bold text-[#141413] tabular-nums">
             {formatFcfa(stats.estimatedEarnings)}
           </p>
-          <p className="mt-1 text-xs text-[#7A5600] tabular-nums">
+          <p className="mt-1 text-xs text-[#8A5600] tabular-nums">
             Encaissé : {formatFcfa(stats.collectedCod)}
           </p>
         </div>
@@ -196,11 +200,11 @@ export function DashboardPage({ onSelectMission, onNavigateTab }: DashboardPageP
         {/* Left Dominant Column: Priority Mission + Primary CTA */}
         <section className="lg:col-span-7 space-y-4">
           <div className="flex items-center justify-between gap-2">
-            <h2 className="text-lg font-bold text-[#111915]">Mission prioritaire</h2>
+            <h2 className="text-lg font-bold text-[#141413]">Mission prioritaire</h2>
             <button
               type="button"
               onClick={() => onNavigateTab('missions')}
-              className="text-sm font-semibold text-[#0F6B3E] hover:underline cursor-pointer"
+              className="text-sm font-semibold text-[#0E6E2D] hover:underline cursor-pointer"
             >
               Tout voir
             </button>
@@ -212,12 +216,12 @@ export function DashboardPage({ onSelectMission, onNavigateTab }: DashboardPageP
               onSelect={onSelectMission}
             />
           ) : (
-            <div className="bg-white border border-[#E4EAE6] rounded-2xl p-6 text-center">
-              <Truck className="w-8 h-8 text-[#586860] mx-auto mb-2.5" aria-hidden="true" />
-              <p className="text-sm font-semibold text-[#111915]">
+            <div className="bg-white border border-[#E5E2D9] rounded-2xl p-6 text-center">
+              <Truck className="w-8 h-8 text-[#5A5851] mx-auto mb-2.5" aria-hidden="true" />
+              <p className="text-sm font-semibold text-[#141413]">
                 Aucune course active en attente
               </p>
-              <p className="text-xs text-[#586860] mt-1">
+              <p className="text-xs text-[#5A5851] mt-1">
                 Restez en statut Disponible pour recevoir les prochaines affectations JikJikoox.
               </p>
             </div>
@@ -227,7 +231,7 @@ export function DashboardPage({ onSelectMission, onNavigateTab }: DashboardPageP
           <button
             type="button"
             onClick={() => onNavigateTab('missions')}
-            className="w-full min-h-[52px] px-5 rounded-xl bg-[#0F6B3E] hover:bg-[#0A5230] text-white font-semibold text-sm flex items-center justify-between gap-3 transition-colors cursor-pointer"
+            className="w-full min-h-[52px] px-5 rounded-xl bg-[#0E6E2D] hover:bg-[#095220] text-white font-semibold text-sm flex items-center justify-between gap-3 transition-colors cursor-pointer"
           >
             <span className="flex items-center gap-2.5">
               <ClipboardList className="w-5 h-5 shrink-0" aria-hidden="true" />
@@ -238,21 +242,21 @@ export function DashboardPage({ onSelectMission, onNavigateTab }: DashboardPageP
 
           {/* Cash to remit reminder when COD collected > 0 */}
           {stats.collectedCod > 0 && (
-            <div className="bg-white border border-[#E4EAE6] rounded-2xl p-4 flex items-center justify-between gap-3">
+            <div className="bg-white border border-[#E5E2D9] rounded-2xl p-4 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-xl bg-[#FEF7E0] text-[#7A5600] flex items-center justify-center shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-[#FEF6E4] text-[#8A5600] flex items-center justify-center shrink-0">
                   <Banknote className="w-5 h-5" aria-hidden="true" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-bold text-[#111915]">
+                  <p className="text-sm font-bold text-[#141413]">
                     Espèces encaissées (COD)
                   </p>
-                  <p className="text-xs text-[#586860] truncate">
+                  <p className="text-xs text-[#5A5851] truncate">
                     À reverser selon la procédure JikJikoox Admin
                   </p>
                 </div>
               </div>
-              <span className="font-mono text-sm font-bold text-[#111915] tabular-nums shrink-0">
+              <span className="font-mono text-sm font-bold text-[#141413] tabular-nums shrink-0">
                 {formatFcfa(stats.collectedCod)}
               </span>
             </div>
@@ -262,21 +266,21 @@ export function DashboardPage({ onSelectMission, onNavigateTab }: DashboardPageP
         {/* Right Column: Recent Notifications */}
         <section className="lg:col-span-5 space-y-4">
           <div className="flex items-center justify-between gap-2">
-            <h2 className="text-lg font-bold text-[#111915]">Notifications récentes</h2>
+            <h2 className="text-lg font-bold text-[#141413]">Notifications récentes</h2>
             <button
               type="button"
               onClick={() => onNavigateTab('notifications')}
-              className="text-sm font-semibold text-[#0F6B3E] hover:underline cursor-pointer"
+              className="text-sm font-semibold text-[#0E6E2D] hover:underline cursor-pointer"
             >
               Historique
             </button>
           </div>
 
-          <div className="bg-white border border-[#E4EAE6] rounded-2xl divide-y divide-[#E4EAE6] overflow-hidden">
+          <div className="bg-white border border-[#E5E2D9] rounded-2xl divide-y divide-[#E5E2D9] overflow-hidden">
             {recentNotifications.length === 0 ? (
               <div className="p-6 text-center">
-                <Bell className="w-7 h-7 text-[#586860] mx-auto mb-2" aria-hidden="true" />
-                <p className="text-sm font-medium text-[#586860]">Aucune alerte récente</p>
+                <Bell className="w-7 h-7 text-[#5A5851] mx-auto mb-2" aria-hidden="true" />
+                <p className="text-sm font-medium text-[#5A5851]">Aucune alerte récente</p>
               </div>
             ) : (
               recentNotifications.map((notif) => (
@@ -290,30 +294,30 @@ export function DashboardPage({ onSelectMission, onNavigateTab }: DashboardPageP
                       onNavigateTab('notifications');
                     }
                   }}
-                  className="w-full text-left p-4 hover:bg-[#F6F7F6] transition-colors cursor-pointer"
+                  className="w-full text-left p-4 hover:bg-[#F7F6F2] transition-colors cursor-pointer"
                 >
-                  <div className="flex items-center justify-between gap-2 text-xs text-[#586860] mb-1">
-                    <span className="font-semibold text-[#0F6B3E]">
+                  <div className="flex items-center justify-between gap-2 text-xs text-[#5A5851] mb-1">
+                    <span className="font-semibold text-[#0E6E2D]">
                       {NOTIFICATION_CATEGORY_LABELS[notif.category]}
                     </span>
                     <span className="tabular-nums">{formatTimeFr(notif.createdAtIso)}</span>
                   </div>
                   <p
                     className={`text-sm leading-snug ${
-                      notif.isRead ? 'font-medium text-[#586860]' : 'font-bold text-[#111915]'
+                      notif.isRead ? 'font-medium text-[#5A5851]' : 'font-bold text-[#141413]'
                     }`}
                   >
                     {notif.title}
                   </p>
-                  <p className="text-xs text-[#586860] mt-1 line-clamp-2">{notif.body}</p>
+                  <p className="text-xs text-[#5A5851] mt-1 line-clamp-2">{notif.body}</p>
                 </button>
               ))
             )}
           </div>
 
           {stats.deliveredCount > 0 && (
-            <div className="flex items-center gap-2 text-xs text-[#586860] px-1">
-              <CheckCircle2 className="w-4 h-4 text-[#0F6B3E] shrink-0" aria-hidden="true" />
+            <div className="flex items-center gap-2 text-xs text-[#5A5851] px-1">
+              <CheckCircle2 className="w-4 h-4 text-[#0E6E2D] shrink-0" aria-hidden="true" />
               <span>
                 {stats.deliveredCount} course{stats.deliveredCount > 1 ? 's' : ''} clôturée
                 {stats.deliveredCount > 1 ? 's' : ''} aujourd’hui sans incident.

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Clock, LogOut, ShieldAlert, Truck } from 'lucide-react';
 import { AppShell } from './components/AppShell';
+import { BrandAccentBar, BrandLogo } from './components/BrandLogo';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { CourierAppProvider, useCourierApp } from './context/CourierAppContext';
 import { DashboardPage } from './pages/DashboardPage';
@@ -34,11 +35,9 @@ function CourierExpressRouter() {
 
   if (!authReady || (mode === 'firebase' && loadingData && !profile)) {
     return (
-      <div className="min-h-screen bg-[#F6F7F6] flex flex-col items-center justify-center gap-3 p-6">
-        <div className="w-11 h-11 rounded-2xl bg-[#0F6B3E] text-white font-display font-extrabold text-sm flex items-center justify-center">
-          JX
-        </div>
-        <p className="text-sm font-medium text-[#586860]">
+      <div className="min-h-screen bg-[#F7F6F2] flex flex-col items-center justify-center gap-4 p-6">
+        <BrandLogo size="lg" showWordmark />
+        <p className="text-sm font-medium text-[#5A5851]">
           Vérification de votre compte livreur...
         </p>
       </div>
@@ -52,50 +51,57 @@ function CourierExpressRouter() {
   // Gate 1 : Livreur authentifié en attente de validation par JikJikoox Admin
   if (mode === 'firebase' && (!profile || profile.accountStatus === 'pending')) {
     return (
-      <div className="min-h-screen bg-[#F6F7F6] flex items-center justify-center p-6">
-        <div className="w-full max-w-md bg-white border border-[#E4EAE6] rounded-2xl p-6 space-y-5">
-          <div className="w-12 h-12 rounded-xl bg-[#FEF7E0] text-[#7A5600] flex items-center justify-center mx-auto">
-            <Clock className="w-6 h-6" aria-hidden="true" />
-          </div>
-          <div className="text-center space-y-2">
-            <h1 className="text-xl font-extrabold text-[#111915]">
-              Compte en attente d’autorisation
-            </h1>
-            <p className="text-sm text-[#586860] leading-relaxed">
-              Votre identité Google est vérifiée, mais l’accès aux missions réelles JikJikoox doit
-              d’abord être approuvé par un administrateur.
-            </p>
-          </div>
+      <div className="min-h-screen bg-[#F7F6F2] flex items-center justify-center p-6">
+        <div className="w-full max-w-md bg-white border border-[#E5E2D9] rounded-2xl overflow-hidden shadow-2xs">
+          <BrandAccentBar />
+          <div className="p-6 space-y-5">
+            <div className="flex justify-center">
+              <BrandLogo size="md" showWordmark />
+            </div>
 
-          {profile && (
-            <div className="rounded-xl bg-[#F6F7F6] border border-[#E4EAE6] p-3.5 text-xs space-y-1">
-              <p className="text-[#586860]">
-                Compte : <strong className="text-[#111915]">{profile.email}</strong>
-              </p>
-              <p className="text-[#586860]">
-                Référence livreur :{' '}
-                <span className="font-mono text-[#111915]">{profile.uid.slice(0, 12)}…</span>
+            <div className="w-12 h-12 rounded-xl bg-[#FEF6E4] text-[#8A5600] flex items-center justify-center mx-auto">
+              <Clock className="w-6 h-6" aria-hidden="true" />
+            </div>
+            <div className="text-center space-y-2">
+              <h1 className="text-xl font-extrabold text-[#141413]">
+                Compte en attente d’autorisation
+              </h1>
+              <p className="text-sm text-[#5A5851] leading-relaxed">
+                Votre identité Google est vérifiée, mais l’accès aux missions réelles JikJikoox doit
+                d’abord être approuvé par un administrateur.
               </p>
             </div>
-          )}
 
-          <div className="space-y-2.5">
-            <button
-              type="button"
-              onClick={enterDemoMode}
-              className="w-full min-h-[48px] px-4 rounded-xl bg-[#0F6B3E] hover:bg-[#0A5230] text-white font-semibold text-sm inline-flex items-center justify-center gap-2 transition-colors cursor-pointer"
-            >
-              <Truck className="w-4 h-4" aria-hidden="true" />
-              <span>Explorer le mode démonstration local</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => void logout()}
-              className="w-full min-h-[46px] px-4 rounded-xl border border-[#D5DDD8] hover:bg-[#F6F7F6] text-[#111915] font-semibold text-sm inline-flex items-center justify-center gap-2 transition-colors cursor-pointer"
-            >
-              <LogOut className="w-4 h-4" aria-hidden="true" />
-              <span>Se déconnecter</span>
-            </button>
+            {profile && (
+              <div className="rounded-xl bg-[#F7F6F2] border border-[#E5E2D9] p-3.5 text-xs space-y-1">
+                <p className="text-[#5A5851]">
+                  Compte : <strong className="text-[#141413]">{profile.email}</strong>
+                </p>
+                <p className="text-[#5A5851]">
+                  Référence livreur :{' '}
+                  <span className="font-mono text-[#141413]">{profile.uid.slice(0, 12)}…</span>
+                </p>
+              </div>
+            )}
+
+            <div className="space-y-2.5">
+              <button
+                type="button"
+                onClick={enterDemoMode}
+                className="w-full min-h-[48px] px-4 rounded-xl bg-[#0E6E2D] hover:bg-[#095220] text-white font-semibold text-sm inline-flex items-center justify-center gap-2 transition-colors cursor-pointer"
+              >
+                <Truck className="w-4 h-4" aria-hidden="true" />
+                <span>Explorer le mode démonstration local</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => void logout()}
+                className="w-full min-h-[46px] px-4 rounded-xl border border-[#D6D1C4] hover:bg-[#F7F6F2] text-[#141413] font-semibold text-sm inline-flex items-center justify-center gap-2 transition-colors cursor-pointer"
+              >
+                <LogOut className="w-4 h-4" aria-hidden="true" />
+                <span>Se déconnecter</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -105,30 +111,36 @@ function CourierExpressRouter() {
   // Gate 2 : Livreur suspendu ou désactivé — blocage strict
   if (mode === 'firebase' && profile && profile.accountStatus !== 'active') {
     return (
-      <div className="min-h-screen bg-[#F6F7F6] flex items-center justify-center p-6">
-        <div className="w-full max-w-md bg-white border border-[#E4EAE6] rounded-2xl p-6 text-center space-y-4">
-          <div className="w-12 h-12 rounded-xl bg-[#FDF0F0] text-[#C82829] flex items-center justify-center mx-auto">
-            <ShieldAlert className="w-6 h-6" aria-hidden="true" />
+      <div className="min-h-screen bg-[#F7F6F2] flex items-center justify-center p-6">
+        <div className="w-full max-w-md bg-white border border-[#E5E2D9] rounded-2xl overflow-hidden shadow-2xs">
+          <BrandAccentBar />
+          <div className="p-6 text-center space-y-4">
+            <div className="flex justify-center">
+              <BrandLogo size="md" showWordmark />
+            </div>
+            <div className="w-12 h-12 rounded-xl bg-[#FDF0EE] text-[#C6241B] flex items-center justify-center mx-auto">
+              <ShieldAlert className="w-6 h-6" aria-hidden="true" />
+            </div>
+            <div>
+              <h1 className="text-xl font-extrabold text-[#141413]">
+                {profile.accountStatus === 'suspended'
+                  ? 'Compte temporairement suspendu'
+                  : 'Compte désactivé'}
+              </h1>
+              <p className="text-sm text-[#5A5851] mt-2 leading-relaxed">
+                Votre accès aux missions JikJikoox Express est actuellement restreint. Contactez votre
+                superviseur JikJikoox Admin à Dakar pour régulariser votre situation.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void logout()}
+              className="w-full min-h-[48px] px-4 rounded-xl bg-[#141413] hover:bg-black text-white font-semibold text-sm inline-flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <LogOut className="w-4 h-4" aria-hidden="true" />
+              <span>Se déconnecter</span>
+            </button>
           </div>
-          <div>
-            <h1 className="text-xl font-extrabold text-[#111915]">
-              {profile.accountStatus === 'suspended'
-                ? 'Compte temporairement suspendu'
-                : 'Compte désactivé'}
-            </h1>
-            <p className="text-sm text-[#586860] mt-2 leading-relaxed">
-              Votre accès aux missions JikJikoox Express est actuellement restreint. Contactez votre
-              superviseur JikJikoox Admin à Dakar pour régulariser votre situation.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => void logout()}
-            className="w-full min-h-[48px] px-4 rounded-xl bg-[#111915] hover:bg-black text-white font-semibold text-sm inline-flex items-center justify-center gap-2 cursor-pointer"
-          >
-            <LogOut className="w-4 h-4" aria-hidden="true" />
-            <span>Se déconnecter</span>
-          </button>
         </div>
       </div>
     );

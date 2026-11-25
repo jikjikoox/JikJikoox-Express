@@ -5,17 +5,21 @@
   --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
-  --color-jkx-green: #0F6B3E;
-  --color-jkx-green-dark: #0A5230;
-  --color-jkx-green-soft: #ECF6F0;
-  --color-jkx-yellow: #E5A400;
-  --color-jkx-yellow-soft: #FEF7E0;
-  --color-jkx-red: #C82829;
-  --color-jkx-red-soft: #FDF0F0;
-  --color-jkx-ink: #111915;
-  --color-jkx-muted: #586860;
-  --color-jkx-border: #E4EAE6;
-  --color-jkx-canvas: #F6F7F6;
+  --color-jkx-green: #0E6E2D;
+  --color-jkx-green-dark: #095220;
+  --color-jkx-leaf: #2F9428;
+  --color-jkx-green-soft: #ECF7EE;
+  --color-jkx-yellow: #F4A61D;
+  --color-jkx-yellow-soft: #FEF6E4;
+  --color-jkx-yellow-ink: #8A5600;
+  --color-jkx-red: #C6241B;
+  --color-jkx-red-dark: #9E1B14;
+  --color-jkx-red-soft: #FDF0EE;
+  --color-jkx-earth: #652214;
+  --color-jkx-ink: #141413;
+  --color-jkx-muted: #5A5851;
+  --color-jkx-border: #E5E2D9;
+  --color-jkx-canvas: #F7F6F2;
 }
 
 @layer base {

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useCourierApp } from '../context/CourierAppContext';
 import type { AppTab } from '../types/delivery';
+import { BrandAccentBar, BrandLogo } from './BrandLogo';
 
 interface AppShellProps {
   activeTab: AppTab;
@@ -49,22 +50,19 @@ export function AppShell({
   } = useCourierApp();
 
   return (
-    <div className="min-h-screen bg-[#F6F7F6] text-[#111915] flex flex-col lg:flex-row">
+    <div className="min-h-screen bg-[#F7F6F2] text-[#141413] flex flex-col lg:flex-row">
       {/* Desktop Sidebar Rail */}
-      <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:shrink-0 lg:sticky lg:top-0 lg:h-screen bg-white border-r border-[#E4EAE6]">
+      <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:shrink-0 lg:sticky lg:top-0 lg:h-screen bg-white border-r border-[#E5E2D9]">
+        <BrandAccentBar />
+
         {/* Brand Header */}
-        <div className="px-6 h-16 flex items-center border-b border-[#E4EAE6]">
+        <div className="px-5 h-16 flex items-center border-b border-[#E5E2D9]">
           <button
             type="button"
             onClick={() => onSelectTab('dashboard')}
-            className="flex items-center gap-2.5 cursor-pointer text-left"
+            className="flex items-center cursor-pointer text-left"
           >
-            <span className="w-8 h-8 rounded-lg bg-[#0F6B3E] flex items-center justify-center text-white font-display font-extrabold text-sm shrink-0">
-              JX
-            </span>
-            <span className="font-display font-extrabold text-base tracking-tight text-[#111915] whitespace-nowrap">
-              JikJikoox Express
-            </span>
+            <BrandLogo size="sm" showWordmark />
           </button>
         </div>
 
@@ -80,8 +78,8 @@ export function AppShell({
                 onClick={() => onSelectTab(item.id)}
                 className={`w-full min-h-[46px] px-3.5 rounded-xl flex items-center justify-between gap-3 text-sm font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                   isActive
-                    ? 'bg-[#ECF6F0] text-[#0F6B3E]'
-                    : 'text-[#586860] hover:bg-[#F6F7F6] hover:text-[#111915]'
+                    ? 'bg-[#ECF7EE] text-[#0E6E2D]'
+                    : 'text-[#5A5851] hover:bg-[#F7F6F2] hover:text-[#141413]'
                 }`}
               >
                 <span className="flex items-center gap-3">
@@ -89,7 +87,7 @@ export function AppShell({
                   <span>{item.label}</span>
                 </span>
                 {item.id === 'notifications' && unreadCount > 0 && (
-                  <span className="font-mono text-xs font-bold text-[#C82829] tabular-nums">
+                  <span className="font-mono text-xs font-bold text-[#C6241B] tabular-nums">
                     {unreadCount}
                   </span>
                 )}
@@ -99,9 +97,9 @@ export function AppShell({
         </nav>
 
         {/* Bottom Availability & Courier Summary */}
-        <div className="p-4 border-t border-[#E4EAE6] space-y-3">
+        <div className="p-4 border-t border-[#E5E2D9] space-y-3">
           {mode === 'demo' && (
-            <p className="text-xs text-[#7A5600] bg-[#FEF7E0] rounded-lg px-3 py-2 font-medium">
+            <p className="text-xs text-[#8A5600] bg-[#FEF6E4] border border-[#F4A61D]/25 rounded-lg px-3 py-2 font-medium">
               Mode démonstration local
             </p>
           )}
@@ -111,8 +109,8 @@ export function AppShell({
               onClick={() => void toggleAvailability()}
               className={`w-full min-h-[44px] px-3.5 rounded-xl border text-sm font-semibold flex items-center justify-between gap-2 transition-colors cursor-pointer ${
                 profile.isAvailable
-                  ? 'border-[#0F6B3E]/30 bg-[#ECF6F0] text-[#0F6B3E]'
-                  : 'border-[#E4EAE6] bg-[#F6F7F6] text-[#586860]'
+                  ? 'border-[#0E6E2D]/30 bg-[#ECF7EE] text-[#0E6E2D]'
+                  : 'border-[#E5E2D9] bg-[#F7F6F2] text-[#5A5851]'
               }`}
             >
               <span className="flex items-center gap-2 truncate">
@@ -128,7 +126,7 @@ export function AppShell({
           <button
             type="button"
             onClick={() => void logout()}
-            className="w-full min-h-[44px] px-3.5 rounded-xl text-sm font-medium text-[#586860] hover:text-[#C82829] hover:bg-[#FDF0F0] flex items-center gap-2.5 transition-colors cursor-pointer"
+            className="w-full min-h-[44px] px-3.5 rounded-xl text-sm font-medium text-[#5A5851] hover:text-[#C6241B] hover:bg-[#FDF0EE] flex items-center gap-2.5 transition-colors cursor-pointer"
           >
             <LogOut className="w-4 h-4 shrink-0" aria-hidden="true" />
             <span>Déconnexion</span>
@@ -139,23 +137,21 @@ export function AppShell({
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Mobile Compact Top App Bar (52px height to stay well under 15% mobile sticky cap) */}
-        <header className="lg:hidden sticky top-0 z-30 h-[52px] bg-white/95 backdrop-blur-md border-b border-[#E4EAE6] px-4 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 min-w-0">
+        <header className="lg:hidden sticky top-0 z-30 h-[52px] bg-white/95 backdrop-blur-md border-b border-[#E5E2D9] px-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
             {showBack && onBack ? (
               <button
                 type="button"
                 onClick={onBack}
                 aria-label="Retour"
-                className="-ml-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl text-[#111915] hover:bg-[#F6F7F6] cursor-pointer"
+                className="-ml-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl text-[#141413] hover:bg-[#F7F6F2] cursor-pointer"
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
             ) : (
-              <span className="w-7 h-7 rounded-lg bg-[#0F6B3E] flex items-center justify-center text-white font-display font-extrabold text-xs shrink-0">
-                JX
-              </span>
+              <BrandLogo size="sm" />
             )}
-            <span className="font-display font-bold text-base text-[#111915] truncate">
+            <span className="font-display font-bold text-base text-[#141413] truncate">
               {pageTitle}
             </span>
           </div>
@@ -166,8 +162,8 @@ export function AppShell({
               onClick={() => void toggleAvailability()}
               className={`min-h-[36px] px-3 rounded-lg text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
                 profile.isAvailable
-                  ? 'bg-[#ECF6F0] text-[#0F6B3E]'
-                  : 'bg-[#F0F2F1] text-[#586860]'
+                  ? 'bg-[#ECF7EE] text-[#0E6E2D]'
+                  : 'bg-[#EFECE4] text-[#5A5851]'
               }`}
             >
               {profile.isAvailable ? 'Disponible' : 'Indisponible'}
@@ -181,7 +177,7 @@ export function AppShell({
             <button
               type="button"
               onClick={onBack}
-              className="inline-flex items-center gap-2 text-sm font-semibold text-[#586860] hover:text-[#111915] transition-colors cursor-pointer"
+              className="inline-flex items-center gap-2 text-sm font-semibold text-[#5A5851] hover:text-[#141413] transition-colors cursor-pointer"
             >
               <ArrowLeft className="w-4 h-4" />
               <span>Retour aux missions</span>
@@ -196,10 +192,10 @@ export function AppShell({
               role="status"
               className={`rounded-xl px-4 py-3 border shadow-sm flex items-center justify-between gap-3 text-sm font-medium ${
                 toast.tone === 'red'
-                  ? 'bg-[#FDF0F0] border-[#C82829]/30 text-[#8F1D1E]'
+                  ? 'bg-[#FDF0EE] border-[#C6241B]/30 text-[#921A14]'
                   : toast.tone === 'yellow'
-                  ? 'bg-[#FEF7E0] border-[#E5A400]/35 text-[#7A5600]'
-                  : 'bg-[#ECF6F0] border-[#0F6B3E]/30 text-[#0A5230]'
+                  ? 'bg-[#FEF6E4] border-[#F4A61D]/40 text-[#8A5600]'
+                  : 'bg-[#ECF7EE] border-[#0E6E2D]/30 text-[#095220]'
               }`}
             >
               <span>{toast.text}</span>
@@ -224,7 +220,7 @@ export function AppShell({
       {/* Mobile Fixed Bottom Tab Bar (5 Destinations) */}
       <nav
         aria-label="Navigation mobile"
-        className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-[#E4EAE6] pb-safe"
+        className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-[#E5E2D9] pb-safe"
       >
         <div className="grid grid-cols-5 h-[60px] items-center">
           {NAV_ITEMS.map((item) => {
@@ -236,13 +232,13 @@ export function AppShell({
                 type="button"
                 onClick={() => onSelectTab(item.id)}
                 className={`relative min-h-[48px] flex flex-col items-center justify-center gap-0.5 transition-colors cursor-pointer ${
-                  isActive ? 'text-[#0F6B3E]' : 'text-[#586860]'
+                  isActive ? 'text-[#0E6E2D]' : 'text-[#5A5851]'
                 }`}
               >
                 <div className="relative">
                   <Icon className="w-[21px] h-[21px]" aria-hidden="true" />
                   {item.id === 'notifications' && unreadCount > 0 && (
-                    <span className="absolute -top-1.5 -right-2.5 min-w-[16px] h-[16px] px-1 rounded-full bg-[#C82829] text-white font-mono text-[10px] font-bold flex items-center justify-center tabular-nums">
+                    <span className="absolute -top-1.5 -right-2.5 min-w-[16px] h-[16px] px-1 rounded-full bg-[#C6241B] text-white font-mono text-[10px] font-bold flex items-center justify-center tabular-nums">
                       {unreadCount > 9 ? '9+' : unreadCount}
                     </span>
                   )}

@@ -62,21 +62,21 @@ export function ProofOfDeliverySheet({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-[#111915]/50 backdrop-blur-[2px] p-0 sm:p-4"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-[#141413]/50 backdrop-blur-[2px] p-0 sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="sheet-title"
     >
-      <div className="w-full sm:max-w-lg bg-white rounded-t-3xl sm:rounded-2xl border border-[#E4EAE6] max-h-[90vh] overflow-y-auto">
+      <div className="w-full sm:max-w-lg bg-white rounded-t-3xl sm:rounded-2xl border border-[#E5E2D9] max-h-[90vh] overflow-y-auto">
         {/* Grab handle on mobile */}
         <div className="sm:hidden pt-3 pb-1 flex justify-center">
-          <div className="w-10 h-1.5 rounded-full bg-[#D5DDD8]" />
+          <div className="w-10 h-1.5 rounded-full bg-[#D6D1C4]" />
         </div>
 
-        <div className="px-5 pt-4 pb-3 border-b border-[#E4EAE6] flex items-center justify-between gap-3">
+        <div className="px-5 pt-4 pb-3 border-b border-[#E5E2D9] flex items-center justify-between gap-3">
           <div>
-            <p className="text-xs font-mono text-[#586860] tabular-nums">{mission.orderNumber}</p>
-            <h2 id="sheet-title" className="text-lg font-bold text-[#111915]">
+            <p className="text-xs font-mono text-[#5A5851] tabular-nums">{mission.orderNumber}</p>
+            <h2 id="sheet-title" className="text-lg font-bold text-[#141413]">
               {sheetMode === 'proof'
                 ? 'Confirmer la livraison'
                 : 'Signaler un échec de livraison'}
@@ -86,7 +86,7 @@ export function ProofOfDeliverySheet({
             type="button"
             onClick={onClose}
             aria-label="Fermer"
-            className="min-w-[44px] min-h-[44px] rounded-xl flex items-center justify-center text-[#586860] hover:bg-[#F6F7F6] transition-colors cursor-pointer"
+            className="min-w-[44px] min-h-[44px] rounded-xl flex items-center justify-center text-[#5A5851] hover:bg-[#F7F6F2] transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -95,13 +95,13 @@ export function ProofOfDeliverySheet({
         {sheetMode === 'proof' ? (
           <form onSubmit={handleProofSubmit} className="p-5 space-y-4">
             {isCod && (
-              <div className="rounded-xl bg-[#FEF7E0] border border-[#E5A400]/30 p-4">
+              <div className="rounded-xl bg-[#FEF6E4] border border-[#F4A61D]/35 p-4">
                 <div className="flex items-center justify-between gap-2 mb-2">
-                  <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#7A5600]">
+                  <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#8A5600]">
                     <Banknote className="w-4 h-4" aria-hidden="true" />
                     Encaissement obligatoire
                   </span>
-                  <span className="font-mono text-base font-bold text-[#111915] tabular-nums">
+                  <span className="font-mono text-base font-bold text-[#141413] tabular-nums">
                     {formatFcfa(mission.codAmount)}
                   </span>
                 </div>
@@ -110,9 +110,9 @@ export function ProofOfDeliverySheet({
                     type="checkbox"
                     checked={codConfirmed}
                     onChange={(e) => setCodConfirmed(e.target.checked)}
-                    className="mt-0.5 w-5 h-5 rounded accent-[#0F6B3E] shrink-0"
+                    className="mt-0.5 w-5 h-5 rounded accent-[#0E6E2D] shrink-0"
                   />
-                  <span className="text-sm text-[#111915] leading-snug">
+                  <span className="text-sm text-[#141413] leading-snug">
                     Je confirme avoir encaissé exactement{' '}
                     <strong className="font-mono tabular-nums">
                       {formatFcfa(mission.codAmount)}
@@ -126,7 +126,7 @@ export function ProofOfDeliverySheet({
             <div>
               <label
                 htmlFor="recipientName"
-                className="block text-sm font-semibold text-[#111915] mb-1.5"
+                className="block text-sm font-semibold text-[#141413] mb-1.5"
               >
                 Nom du réceptionnaire
               </label>
@@ -138,16 +138,16 @@ export function ProofOfDeliverySheet({
                 value={recipientName}
                 onChange={(e) => setRecipientName(e.target.value)}
                 placeholder="Ex. Aïssatou Ndiaye ou Gardien"
-                className="w-full min-h-[46px] px-3.5 rounded-xl border border-[#D5DDD8] bg-white text-[#111915] text-sm focus:outline-none focus:border-[#0F6B3E] focus:ring-2 focus:ring-[#0F6B3E]/15"
+                className="w-full min-h-[46px] px-3.5 rounded-xl border border-[#D6D1C4] bg-white text-[#141413] text-sm focus:outline-none focus:border-[#0E6E2D] focus:ring-2 focus:ring-[#0E6E2D]/15"
               />
             </div>
 
             <div>
               <label
                 htmlFor="proofCode"
-                className="block text-sm font-semibold text-[#111915] mb-1.5"
+                className="block text-sm font-semibold text-[#141413] mb-1.5"
               >
-                Code de remise client <span className="font-normal text-[#586860]">(optionnel)</span>
+                Code de remise client <span className="font-normal text-[#5A5851]">(optionnel)</span>
               </label>
               <input
                 id="proofCode"
@@ -157,16 +157,16 @@ export function ProofOfDeliverySheet({
                 value={proofCode}
                 onChange={(e) => setProofCode(e.target.value)}
                 placeholder="Ex. 4829"
-                className="w-full min-h-[46px] px-3.5 rounded-xl border border-[#D5DDD8] bg-white font-mono text-[#111915] text-sm tracking-wider focus:outline-none focus:border-[#0F6B3E] focus:ring-2 focus:ring-[#0F6B3E]/15"
+                className="w-full min-h-[46px] px-3.5 rounded-xl border border-[#D6D1C4] bg-white font-mono text-[#141413] text-sm tracking-wider focus:outline-none focus:border-[#0E6E2D] focus:ring-2 focus:ring-[#0E6E2D]/15"
               />
             </div>
 
             <div>
               <label
                 htmlFor="proofNote"
-                className="block text-sm font-semibold text-[#111915] mb-1.5"
+                className="block text-sm font-semibold text-[#141413] mb-1.5"
               >
-                Observation terrain <span className="font-normal text-[#586860]">(optionnel)</span>
+                Observation terrain <span className="font-normal text-[#5A5851]">(optionnel)</span>
               </label>
               <textarea
                 id="proofNote"
@@ -175,7 +175,7 @@ export function ProofOfDeliverySheet({
                 value={proofNote}
                 onChange={(e) => setProofNote(e.target.value)}
                 placeholder="Ex. Remis à l’accueil de l’immeuble, colis intact."
-                className="w-full px-3.5 py-2.5 rounded-xl border border-[#D5DDD8] bg-white text-[#111915] text-sm focus:outline-none focus:border-[#0F6B3E] focus:ring-2 focus:ring-[#0F6B3E]/15 resize-none"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-[#D6D1C4] bg-white text-[#141413] text-sm focus:outline-none focus:border-[#0E6E2D] focus:ring-2 focus:ring-[#0E6E2D]/15 resize-none"
               />
             </div>
 
@@ -183,14 +183,14 @@ export function ProofOfDeliverySheet({
               <button
                 type="button"
                 onClick={onClose}
-                className="sm:w-1/3 min-h-[48px] px-4 rounded-xl border border-[#D5DDD8] text-[#111915] font-semibold text-sm hover:bg-[#F6F7F6] transition-colors cursor-pointer"
+                className="sm:w-1/3 min-h-[48px] px-4 rounded-xl border border-[#D6D1C4] text-[#141413] font-semibold text-sm hover:bg-[#F7F6F2] transition-colors cursor-pointer"
               >
                 Annuler
               </button>
               <button
                 type="submit"
                 disabled={submitting || !recipientName.trim() || (isCod && !codConfirmed)}
-                className="sm:flex-1 min-h-[48px] px-4 rounded-xl bg-[#0F6B3E] hover:bg-[#0A5230] disabled:opacity-50 text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                className="sm:flex-1 min-h-[48px] px-4 rounded-xl bg-[#0E6E2D] hover:bg-[#095220] disabled:opacity-50 text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer"
               >
                 <CheckCircle2 className="w-4 h-4" aria-hidden="true" />
                 {submitting ? 'Enregistrement...' : 'Valider la livraison'}
@@ -199,7 +199,7 @@ export function ProofOfDeliverySheet({
           </form>
         ) : (
           <form onSubmit={handleFailureSubmit} className="p-5 space-y-4">
-            <div className="rounded-xl bg-[#FDF0F0] border border-[#C82829]/20 p-3.5 flex items-start gap-2.5 text-sm text-[#8F1D1E]">
+            <div className="rounded-xl bg-[#FDF0EE] border border-[#C6241B]/20 p-3.5 flex items-start gap-2.5 text-sm text-[#921A14]">
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
               <span>
                 Un échec de livraison est transmis à JikJikoox Admin pour suivi client et éventuel
@@ -208,14 +208,14 @@ export function ProofOfDeliverySheet({
             </div>
 
             <div className="space-y-2">
-              <p className="text-sm font-semibold text-[#111915]">Motif principal</p>
+              <p className="text-sm font-semibold text-[#141413]">Motif principal</p>
               {FAILURE_REASONS.map((reason) => (
                 <label
                   key={reason}
                   className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
                     selectedReason === reason
-                      ? 'border-[#C82829] bg-[#FDF0F0]/50'
-                      : 'border-[#E4EAE6] hover:bg-[#F6F7F6]'
+                      ? 'border-[#C6241B] bg-[#FDF0EE]/55'
+                      : 'border-[#E5E2D9] hover:bg-[#F7F6F2]'
                   }`}
                 >
                   <input
@@ -224,9 +224,9 @@ export function ProofOfDeliverySheet({
                     value={reason}
                     checked={selectedReason === reason}
                     onChange={() => setSelectedReason(reason)}
-                    className="w-4 h-4 accent-[#C82829]"
+                    className="w-4 h-4 accent-[#C6241B]"
                   />
-                  <span className="text-sm text-[#111915]">{reason}</span>
+                  <span className="text-sm text-[#141413]">{reason}</span>
                 </label>
               ))}
             </div>
@@ -234,9 +234,9 @@ export function ProofOfDeliverySheet({
             <div>
               <label
                 htmlFor="customReason"
-                className="block text-sm font-semibold text-[#111915] mb-1.5"
+                className="block text-sm font-semibold text-[#141413] mb-1.5"
               >
-                Précision complémentaire <span className="font-normal text-[#586860]">(optionnel)</span>
+                Précision complémentaire <span className="font-normal text-[#5A5851]">(optionnel)</span>
               </label>
               <input
                 id="customReason"
@@ -245,7 +245,7 @@ export function ProofOfDeliverySheet({
                 value={customReason}
                 onChange={(e) => setCustomReason(e.target.value)}
                 placeholder="Ex. Client a demandé une reprogrammation demain matin"
-                className="w-full min-h-[46px] px-3.5 rounded-xl border border-[#D5DDD8] bg-white text-[#111915] text-sm focus:outline-none focus:border-[#C82829] focus:ring-2 focus:ring-[#C82829]/15"
+                className="w-full min-h-[46px] px-3.5 rounded-xl border border-[#D6D1C4] bg-white text-[#141413] text-sm focus:outline-none focus:border-[#C6241B] focus:ring-2 focus:ring-[#C6241B]/15"
               />
             </div>
 
@@ -253,14 +253,14 @@ export function ProofOfDeliverySheet({
               <button
                 type="button"
                 onClick={onClose}
-                className="sm:w-1/3 min-h-[48px] px-4 rounded-xl border border-[#D5DDD8] text-[#111915] font-semibold text-sm hover:bg-[#F6F7F6] transition-colors cursor-pointer"
+                className="sm:w-1/3 min-h-[48px] px-4 rounded-xl border border-[#D6D1C4] text-[#141413] font-semibold text-sm hover:bg-[#F7F6F2] transition-colors cursor-pointer"
               >
                 Annuler
               </button>
               <button
                 type="submit"
                 disabled={submitting}
-                className="sm:flex-1 min-h-[48px] px-4 rounded-xl bg-[#C82829] hover:bg-[#A61F20] disabled:opacity-50 text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                className="sm:flex-1 min-h-[48px] px-4 rounded-xl bg-[#C6241B] hover:bg-[#9E1B14] disabled:opacity-50 text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer"
               >
                 <AlertTriangle className="w-4 h-4" aria-hidden="true" />
                 {submitting ? 'Transmission...' : 'Confirmer l’échec'}

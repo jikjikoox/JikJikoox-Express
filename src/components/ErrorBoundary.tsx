@@ -1,5 +1,6 @@
 import React from 'react';
 import { AlertTriangle, RotateCcw } from 'lucide-react';
+import { BrandAccentBar, BrandLogo } from './BrandLogo';
 
 interface State {
   hasError: boolean;
@@ -34,23 +35,29 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
       }
 
       return (
-        <div className="min-h-screen bg-[#F6F7F6] flex items-center justify-center p-6">
-          <div className="w-full max-w-md bg-white border border-[#E4EAE6] rounded-2xl p-6 text-center">
-            <div className="w-12 h-12 rounded-xl bg-[#FDF0F0] text-[#C82829] flex items-center justify-center mx-auto mb-4">
-              <AlertTriangle className="w-6 h-6" aria-hidden="true" />
+        <div className="min-h-screen bg-[#F7F6F2] flex items-center justify-center p-6">
+          <div className="w-full max-w-md bg-white border border-[#E5E2D9] rounded-2xl overflow-hidden text-center shadow-2xs">
+            <BrandAccentBar />
+            <div className="p-6">
+              <div className="flex justify-center mb-5">
+                <BrandLogo size="md" showWordmark />
+              </div>
+              <div className="w-12 h-12 rounded-xl bg-[#FDF0EE] text-[#C6241B] flex items-center justify-center mx-auto mb-4">
+                <AlertTriangle className="w-6 h-6" aria-hidden="true" />
+              </div>
+              <h1 className="text-lg font-bold text-[#141413] mb-2">
+                Interruption momentanée
+              </h1>
+              <p className="text-sm text-[#5A5851] mb-6 leading-relaxed">{friendly}</p>
+              <button
+                type="button"
+                onClick={this.handleReload}
+                className="w-full min-h-[48px] px-4 py-3 rounded-xl bg-[#0E6E2D] hover:bg-[#095220] text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer"
+              >
+                <RotateCcw className="w-4 h-4" aria-hidden="true" />
+                Recharger l’application
+              </button>
             </div>
-            <h1 className="text-lg font-bold text-[#111915] mb-2">
-              Interruption momentanée
-            </h1>
-            <p className="text-sm text-[#586860] mb-6 leading-relaxed">{friendly}</p>
-            <button
-              type="button"
-              onClick={this.handleReload}
-              className="w-full min-h-[48px] px-4 py-3 rounded-xl bg-[#0F6B3E] hover:bg-[#0A5230] text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer"
-            >
-              <RotateCcw className="w-4 h-4" aria-hidden="true" />
-              Recharger l’application
-            </button>
           </div>
         </div>
       );

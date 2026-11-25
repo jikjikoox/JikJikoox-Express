@@ -24,16 +24,16 @@ function CategoryIcon({ category }: { category: NotificationCategory }) {
   const base = 'w-5 h-5 shrink-0';
   switch (category) {
     case 'assignment':
-      return <PackagePlus className={`${base} text-[#0F6B3E]`} aria-hidden="true" />;
+      return <PackagePlus className={`${base} text-[#0E6E2D]`} aria-hidden="true" />;
     case 'confirmation':
-      return <CheckCircle2 className={`${base} text-[#0F6B3E]`} aria-hidden="true" />;
+      return <CheckCircle2 className={`${base} text-[#0E6E2D]`} aria-hidden="true" />;
     case 'instruction':
     case 'modification':
-      return <MessageSquareText className={`${base} text-[#9A6B00]`} aria-hidden="true" />;
+      return <MessageSquareText className={`${base} text-[#8A5600]`} aria-hidden="true" />;
     case 'cancellation':
-      return <AlertTriangle className={`${base} text-[#C82829]`} aria-hidden="true" />;
+      return <AlertTriangle className={`${base} text-[#C6241B]`} aria-hidden="true" />;
     default:
-      return <Info className={`${base} text-[#586860]`} aria-hidden="true" />;
+      return <Info className={`${base} text-[#5A5851]`} aria-hidden="true" />;
   }
 }
 
@@ -67,8 +67,8 @@ export function NotificationsPage({ onSelectMission }: NotificationsPageProps) {
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-extrabold text-[#111915] tracking-tight">Notifications</h1>
-          <p className="text-sm text-[#586860] mt-0.5 tabular-nums">
+          <h1 className="text-2xl font-extrabold text-[#141413] tracking-tight">Notifications</h1>
+          <p className="text-sm text-[#5A5851] mt-0.5 tabular-nums">
             {unreadCount > 0
               ? `${unreadCount} notification${unreadCount > 1 ? 's' : ''} non lue${unreadCount > 1 ? 's' : ''}`
               : 'Toutes vos alertes sont à jour'}
@@ -79,7 +79,7 @@ export function NotificationsPage({ onSelectMission }: NotificationsPageProps) {
           <button
             type="button"
             onClick={() => void markAllNotificationsRead()}
-            className="min-h-[42px] px-4 rounded-xl bg-white border border-[#D5DDD8] hover:bg-[#ECF6F0] hover:border-[#0F6B3E]/30 text-sm font-semibold text-[#0F6B3E] inline-flex items-center gap-2 transition-colors cursor-pointer"
+            className="min-h-[42px] px-4 rounded-xl bg-white border border-[#D6D1C4] hover:bg-[#ECF7EE] hover:border-[#0E6E2D]/30 text-sm font-semibold text-[#0E6E2D] inline-flex items-center gap-2 transition-colors cursor-pointer"
           >
             <CheckCheck className="w-4 h-4 shrink-0" aria-hidden="true" />
             <span>Tout marquer comme lu</span>
@@ -88,16 +88,16 @@ export function NotificationsPage({ onSelectMission }: NotificationsPageProps) {
       </div>
 
       {/* FCM Channel Notice */}
-      <section className="bg-white border border-[#E4EAE6] rounded-2xl p-4 flex items-center justify-between gap-3">
+      <section className="bg-white border border-[#E5E2D9] rounded-2xl p-4 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="w-10 h-10 rounded-xl bg-[#ECF6F0] text-[#0F6B3E] flex items-center justify-center shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-[#ECF7EE] text-[#0E6E2D] flex items-center justify-center shrink-0">
             <BellRing className="w-5 h-5" aria-hidden="true" />
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-bold text-[#111915]">
+            <p className="text-sm font-bold text-[#141413]">
               Alertes temps réel (Firebase Cloud Messaging)
             </p>
-            <p className="text-xs text-[#586860]">
+            <p className="text-xs text-[#5A5851]">
               {profile?.notificationsEnabled
                 ? 'Notifications activées pour les affectations, instructions et confirmations.'
                 : 'Notifications désactivées dans votre profil livreur.'}
@@ -110,7 +110,7 @@ export function NotificationsPage({ onSelectMission }: NotificationsPageProps) {
       <div
         role="tablist"
         aria-label="Filtrer les notifications"
-        className="flex items-center gap-1 p-1 bg-[#E9EFEA] rounded-xl max-w-md"
+        className="flex items-center gap-1 p-1 bg-[#EFECE4] rounded-xl max-w-md"
       >
         {(
           [
@@ -127,8 +127,8 @@ export function NotificationsPage({ onSelectMission }: NotificationsPageProps) {
             onClick={() => setFilter(tab.id)}
             className={`flex-1 min-h-[38px] px-3 rounded-lg text-xs sm:text-sm font-semibold whitespace-nowrap transition-colors cursor-pointer tabular-nums ${
               filter === tab.id
-                ? 'bg-white text-[#0F6B3E] shadow-xs'
-                : 'text-[#586860] hover:text-[#111915]'
+                ? 'bg-white text-[#0E6E2D] shadow-xs'
+                : 'text-[#5A5851] hover:text-[#141413]'
             }`}
           >
             {tab.label}
@@ -138,31 +138,31 @@ export function NotificationsPage({ onSelectMission }: NotificationsPageProps) {
 
       {/* Notifications Feed */}
       {filtered.length === 0 ? (
-        <div className="bg-white border border-[#E4EAE6] rounded-2xl p-10 text-center">
-          <Bell className="w-9 h-9 text-[#586860] mx-auto mb-3" aria-hidden="true" />
-          <p className="text-base font-bold text-[#111915]">Aucune notification</p>
-          <p className="text-sm text-[#586860] mt-1">
+        <div className="bg-white border border-[#E5E2D9] rounded-2xl p-10 text-center">
+          <Bell className="w-9 h-9 text-[#5A5851] mx-auto mb-3" aria-hidden="true" />
+          <p className="text-base font-bold text-[#141413]">Aucune notification</p>
+          <p className="text-sm text-[#5A5851] mt-1">
             Les nouvelles affectations et instructions opérationnelles s’afficheront ici.
           </p>
         </div>
       ) : (
-        <div className="bg-white border border-[#E4EAE6] rounded-2xl divide-y divide-[#E4EAE6] overflow-hidden">
+        <div className="bg-white border border-[#E5E2D9] rounded-2xl divide-y divide-[#E5E2D9] overflow-hidden">
           {filtered.map((notif) => (
             <button
               key={notif.notificationId}
               type="button"
               onClick={() => void handleOpenNotif(notif.notificationId, notif.missionId)}
               className={`w-full text-left p-4 sm:p-5 flex items-start gap-3.5 transition-colors cursor-pointer ${
-                notif.isRead ? 'bg-white hover:bg-[#F6F7F6]' : 'bg-[#ECF6F0]/45 hover:bg-[#ECF6F0]/75'
+                notif.isRead ? 'bg-white hover:bg-[#F7F6F2]' : 'bg-[#ECF7EE]/50 hover:bg-[#ECF7EE]/80'
               }`}
             >
-              <div className="w-10 h-10 rounded-xl bg-white border border-[#E4EAE6] flex items-center justify-center shrink-0 mt-0.5">
+              <div className="w-10 h-10 rounded-xl bg-white border border-[#E5E2D9] flex items-center justify-center shrink-0 mt-0.5">
                 <CategoryIcon category={notif.category} />
               </div>
 
               <div className="flex-1 min-w-0">
-                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#586860]">
-                  <span className="font-semibold text-[#0F6B3E]">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#5A5851]">
+                  <span className="font-semibold text-[#0E6E2D]">
                     {NOTIFICATION_CATEGORY_LABELS[notif.category]}
                     {!notif.isRead ? ' · Nouveau' : ''}
                   </span>
@@ -170,16 +170,16 @@ export function NotificationsPage({ onSelectMission }: NotificationsPageProps) {
                 </div>
                 <p
                   className={`text-sm sm:text-base mt-1 leading-snug ${
-                    notif.isRead ? 'font-semibold text-[#586860]' : 'font-bold text-[#111915]'
+                    notif.isRead ? 'font-semibold text-[#5A5851]' : 'font-bold text-[#141413]'
                   }`}
                 >
                   {notif.title}
                 </p>
-                <p className="text-sm text-[#586860] mt-1 leading-relaxed">{notif.body}</p>
+                <p className="text-sm text-[#5A5851] mt-1 leading-relaxed">{notif.body}</p>
               </div>
 
               {notif.missionId && (
-                <ChevronRight className="w-5 h-5 text-[#586860] shrink-0 mt-2" aria-hidden="true" />
+                <ChevronRight className="w-5 h-5 text-[#5A5851] shrink-0 mt-2" aria-hidden="true" />
               )}
             </button>
           ))}

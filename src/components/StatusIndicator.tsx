@@ -17,10 +17,10 @@ interface StatusIndicatorProps {
 }
 
 const TONE_CLASSES: Record<'green' | 'yellow' | 'red' | 'neutral', string> = {
-  green: 'text-[#0F6B3E]',
-  yellow: 'text-[#9A6B00]',
-  red: 'text-[#C82829]',
-  neutral: 'text-[#586860]',
+  green: 'text-[#0E6E2D]',
+  yellow: 'text-[#8A5600]',
+  red: 'text-[#C6241B]',
+  neutral: 'text-[#5A5851]',
 };
 
 function StatusIcon({ status }: { status: MissionStatus }) {
