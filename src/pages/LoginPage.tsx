@@ -34,6 +34,8 @@ export function LoginPage() {
         {!heroError ? (
           <img
             src={LOGIN_HERO_IMAGE}
+            decoding="async"
+            fetchPriority="high"
             alt="Scooter de livraison JikJikoox Express sur une avenue ensoleillée de Dakar"
             referrerPolicy="no-referrer"
             onError={() => setHeroError(true)}
