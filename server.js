@@ -8,7 +8,7 @@ const __dirname = path.dirname(__filename);
 
 const distDir = path.join(__dirname, 'dist');
 const indexHtmlPath = path.join(distDir, 'index.html');
-const port = Number(process.env.PORT) || 3000;
+const port = process.env.PORT || 3000;
 
 const app = express();
 app.disable('x-powered-by');
@@ -20,7 +20,11 @@ app.use((_req, res, next) => {
 });
 
 app.get('/healthz', (_req, res) => {
-  res.status(200).json({ ok: true, service: 'jikjikoox-express' });
+  res.status(200).json({
+    ok: true,
+    service: 'jikjikoox-express',
+    distReady: fs.existsSync(indexHtmlPath),
+  });
 });
 
 app.use(
@@ -43,8 +47,8 @@ app.use((req, res, next) => {
   }
   if (!fs.existsSync(indexHtmlPath)) {
     res
-      .status(503)
-      .type('text/plain')
+      .status(500)
+      .type('text/plain; charset=utf-8')
       .send('Build frontend introuvable (dist/index.html). Exécutez "npm run build".');
     return;
   }
@@ -52,6 +56,8 @@ app.use((req, res, next) => {
   res.sendFile(indexHtmlPath);
 });
 
-app.listen(port, '0.0.0.0', () => {
-  console.log(`JikJikoox Express listening on port ${port}`);
+app.listen(port, () => {
+  console.log(`JikJikoox Express listening on port ${port} (distReady=${fs.existsSync(indexHtmlPath)})`);
 });
+
+export default app;

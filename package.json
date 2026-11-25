@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
     "start": "node server.js",
+    "postinstall": "vite build",
     "build": "vite build",
     "build:staging": "node scripts/validate-staging-env.mjs .env.staging && vite build --mode staging",
     "preview": "vite preview",
