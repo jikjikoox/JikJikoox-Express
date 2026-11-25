@@ -73,6 +73,8 @@ export function ProfilePage() {
             {profile.photoUrl && !avatarError ? (
               <img
                 src={profile.photoUrl}
+                loading="lazy"
+                decoding="async"
                 alt={`Portrait de ${profile.firstName} ${profile.lastName}`}
                 referrerPolicy="no-referrer"
                 onError={() => setAvatarError(true)}
