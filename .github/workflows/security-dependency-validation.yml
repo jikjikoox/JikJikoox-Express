@@ -1,0 +1,44 @@
+name: Security dependency validation
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - "fix/grpc-js-cve-2026-101916"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Install, typecheck, build and security tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies from committed lockfile
+        run: bun install --frozen-lockfile
+
+      - name: TypeScript validation
+        run: bun run lint
+
+      - name: Production build
+        run: bun run build
+
+      - name: Security logic tests
+        run: bun run test:security
+
+      - name: Confirm patched gRPC version
+        run: |
+          node -e 'const fs=require("node:fs");const path=require("node:path");let d=path.dirname(require.resolve("@grpc/grpc-js"));while(!fs.existsSync(path.join(d,"package.json"))){const parent=path.dirname(d);if(parent===d)throw new Error("grpc-js package.json not found");d=parent;}const v=JSON.parse(fs.readFileSync(path.join(d,"package.json"),"utf8")).version;console.log("@grpc/grpc-js",v);if(v!=="1.14.7")process.exit(1)'
+
+      - name: Ensure lockfile is committed
+        run: git diff --exit-code -- bun.lock
