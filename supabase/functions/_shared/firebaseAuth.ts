@@ -166,6 +166,7 @@ export interface VerifyFirebaseTokenOptions {
   resolver?: JwkKeyResolver;
   nowSeconds?: number;
   clockSkewSeconds?: number;
+  requireVerifiedEmail?: boolean;
 }
 
 export async function verifyFirebaseIdToken(
@@ -239,7 +240,7 @@ export async function verifyFirebaseIdToken(
 
   const email = typeof payload.email === 'string' ? payload.email : '';
   const emailVerified = payload.email_verified === true;
-  if (!email || !emailVerified) {
+  if (!email || (options.requireVerifiedEmail !== false && !emailVerified)) {
     throw new FirebaseAuthError(
       'EMAIL_NOT_VERIFIED',
       'Votre adresse email Google doit être vérifiée.',
