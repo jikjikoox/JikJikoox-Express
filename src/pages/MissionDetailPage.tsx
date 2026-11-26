@@ -20,6 +20,7 @@ import {
 import { StatusIndicator } from '../components/StatusIndicator';
 import { useCourierApp } from '../context/CourierAppContext';
 import { useCourierActions } from '../hooks/useCourierActions';
+import { expressApi } from '../services/expressApi';
 import { isMissionTrackableStatus } from '../lib/gpsTracker';
 import {
   ACTIVE_WORKFLOW_STEPS,
@@ -50,7 +51,7 @@ interface MissionDetailPageProps {
 }
 
 export function MissionDetailPage({ missionId, onBack }: MissionDetailPageProps) {
-  const { missions, gpsTracker, showToast } = useCourierApp();
+  const { missions, gpsTracker, showToast, firebaseUser, refreshBackendData } = useCourierApp();
   const { executeTransition } = useCourierActions();
   const mission = missions.find((m) => m.missionId === missionId);
 
@@ -59,6 +60,10 @@ export function MissionDetailPage({ missionId, onBack }: MissionDetailPageProps)
   const [activeSheet, setActiveSheet] = useState<'proof' | 'failure' | null>(null);
   const [qrScannerOpen, setQrScannerOpen] = useState(false);
   const [pendingQrValidation, setPendingQrValidation] = useState<QrValidationSuccess | null>(null);
+  const [codPaymentScannerOpen, setCodPaymentScannerOpen] = useState(false);
+  const [scannedCodToken, setScannedCodToken] = useState<string | null>(null);
+  const [codAmountInput, setCodAmountInput] = useState("");
+  const [codPaymentBusy, setCodPaymentBusy] = useState(false);
 
   if (!mission) {
     return (
@@ -480,6 +485,18 @@ export function MissionDetailPage({ missionId, onBack }: MissionDetailPageProps)
                   </button>
                 )}
 
+                {isCod && mission.status !== 'DELIVERED' && (
+                  <button
+                    type="button"
+                    disabled={busyStatus !== null || codPaymentBusy}
+                    onClick={() => setCodPaymentScannerOpen(true)}
+                    className="w-full min-h-[54px] px-4 rounded-xl border-2 border-[#F4A61D] bg-[#FEF6E4] hover:bg-[#FCE8BC] text-[#6B4300] font-semibold text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-60"
+                  >
+                    <Banknote className="w-5 h-5 shrink-0" aria-hidden="true" />
+                    <span>Scanner le QR de paiement COD</span>
+                  </button>
+                )}
+
                 {actions.map((action) => {
                   const isManualDeliverySecondary =
                     mission.status === 'ARRIVED' && action.nextStatus === 'DELIVERED';
@@ -617,7 +634,68 @@ export function MissionDetailPage({ missionId, onBack }: MissionDetailPageProps)
         </Suspense>
       )}
 
+      {scannedCodToken && (
+        <div className="fixed inset-0 z-[60] bg-[#141413]/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" role="dialog" aria-modal="true" aria-labelledby="cod-payment-confirm-title">
+          <div className="w-full max-w-md bg-white rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-11 h-11 rounded-xl bg-[#ECF7EE] text-[#0E6E2D] flex items-center justify-center shrink-0"><Banknote className="w-6 h-6"/></div>
+              <div className="flex-1">
+                <h2 id="cod-payment-confirm-title" className="text-lg font-extrabold text-[#141413]">Confirmer l’encaissement COD</h2>
+                <p className="text-sm text-[#5A5851] mt-1">Commande {mission.orderNumber}. Vérifiez l’argent reçu du client avant confirmation.</p>
+              </div>
+            </div>
+            <div className="rounded-xl bg-[#F7F6F2] border border-[#E5E2D9] p-3">
+              <p className="text-xs text-[#5A5851]">Montant attendu</p>
+              <p className="text-2xl font-extrabold text-[#141413] tabular-nums">{formatFcfa(mission.codAmount)}</p>
+            </div>
+            <label className="block text-sm font-semibold text-[#141413]">
+              Montant réellement encaissé (FCFA)
+              <input inputMode="numeric" type="number" min="0" step="1" value={codAmountInput} onChange={e=>setCodAmountInput(e.target.value)} className="mt-1.5 w-full min-h-[48px] rounded-xl border border-[#D6D1C4] px-3 text-base font-bold tabular-nums focus:outline-none focus:ring-2 focus:ring-[#0E6E2D]" />
+            </label>
+            <p className="text-xs text-[#5A5851]">Le serveur vérifie le QR, l’affectation au livreur, le montant exact et empêche un double encaissement. La commande est marquée payée après validation serveur.</p>
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" disabled={codPaymentBusy} onClick={()=>{setScannedCodToken(null);setCodAmountInput("");}} className="min-h-[48px] rounded-xl border border-[#D6D1C4] text-sm font-semibold text-[#141413]">Annuler</button>
+              <button type="button" disabled={codPaymentBusy || Number(codAmountInput)!==mission.codAmount || Number(codAmountInput)<=0} onClick={async()=>{
+                if(!firebaseUser||!scannedCodToken)return;
+                setCodPaymentBusy(true);
+                try{
+                  const idToken=await firebaseUser.getIdToken();
+                  const res=await expressApi.confirmCodQrPayment(idToken,{token:scannedCodToken,amount:Number(codAmountInput),orderReference:mission.orderNumber});
+                  setScannedCodToken(null);setCodAmountInput("");
+                  showToast(`Paiement confirmé : ${formatFcfa(res.amount)} · commande ${res.order_reference}`,'green');
+                  await refreshBackendData();
+                }catch(err){showToast(err instanceof Error?err.message:"Validation du paiement refusée.",'red');}
+                finally{setCodPaymentBusy(false);}
+              }} className="min-h-[48px] rounded-xl bg-[#0E6E2D] hover:bg-[#095220] text-white text-sm font-bold disabled:opacity-50 inline-flex items-center justify-center gap-2">
+                {codPaymentBusy?<Clock className="w-4 h-4 animate-spin"/>:<CheckCircle2 className="w-4 h-4"/>}
+                Confirmer encaissé
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Camera QR Code Scanner Modal (lazy-loaded on demand) */}
+      {codPaymentScannerOpen && (
+        <Suspense fallback={null}>
+          <QRCodeScanner
+            mission={mission}
+            codPaymentMode
+            onCodPayload={(raw)=>{
+              let token="";
+              try{
+                const url=new URL(raw);
+                if(url.hostname!=="livraison.jikjikoox.com"||url.pathname!=="/cod/scan")throw new Error("Ce QR n’est pas un QR de règlement JikJikoox.");
+                token=url.searchParams.get("token")||"";
+              }catch(err){if(err instanceof Error&&err.message.includes("QR"))throw err;throw new Error("QR de paiement invalide ou mal formé.");}
+              if(token.length<30)throw new Error("QR de paiement invalide.");
+              setScannedCodToken(token);setCodAmountInput(String(mission.codAmount));setCodPaymentScannerOpen(false);
+            }}
+            onClose={()=>setCodPaymentScannerOpen(false)}
+            onValidated={()=>undefined}
+          />
+        </Suspense>
+      )}
       {qrScannerOpen && (
         <Suspense fallback={null}>
           <QRCodeScanner
