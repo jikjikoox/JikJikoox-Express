@@ -98,15 +98,17 @@ runCheck('S07', 'Immuabilité preuves & historique : création backend/isAdmin()
   assert.match(proofsBlock, /allow update, delete: if false;/);
 });
 
-// 8. Storage rules: private, image-only, max 5MB, immutable proofs
-runCheck('S08', 'Firebase Storage : accès privé, images <= 5 Mo, preuves immuables', () => {
+// 8. Firebase Storage delivery proof paths must be client-denied (Supabase signed upload only).
+runCheck('S08', 'Firebase Storage : uploads de preuve bloqués côté client; upload via URL Supabase signée', () => {
   assert.match(storageRules, /match \/\{allPaths=\*\*\}\s*\{\s*allow read, write: if false;\s*\}/);
-  assert.match(storageRules, /request\.resource\.size <= 5 \* 1024 \* 1024/);
-  assert.match(storageRules, /'image\/jpeg', 'image\/png', 'image\/webp'/);
-  assert.match(storageRules, /match \/delivery_proofs\/\{courierId\}\/\{missionId\}\/\{fileName\}[\s\S]*?allow update, delete: if false;/);
+  const proofBlock = storageRules.split('match /delivery_proofs/{courierId}/{missionId}/{fileName}')[1].split('match /courier_avatars')[0];
+  assert.match(proofBlock, /allow read, write: if false;/);
+  assert.doesNotMatch(proofBlock, /allow create|allow update|request\.resource/);
+  assert.match(contextSource, /prepareDeliveryProofUpload/);
+  assert.match(contextSource, /uploadPhotoToSignedUrl/);
 });
 
-// 9. Workflow state machine: valid path allowed, shortcuts & terminal mutations blocked
+// 9. Workflow state machine: valid path allowed, shortcuts & terminal mutations blocked// 9. Workflow state machine: valid path allowed, shortcuts & terminal mutations blocked
 runCheck('S09', 'Machine à états : transitions valides acceptées, sauts et états terminaux refusés', () => {
   assert.equal(isTransitionAllowed('ASSIGNED', 'ACCEPTED'), true);
   assert.equal(isTransitionAllowed('ACCEPTED', 'PICKED_UP'), true);
