@@ -44,30 +44,25 @@ function resolveFirebaseConfig() {
   // Sur le domaine de production (livraison.jikjikoox.com), une variable Hostinger mal configurée
   // (ex. VITE_APP_ENV=staging ou VITE_FIREBASE_API_KEY="-") ne doit jamais empêcher React de démarrer.
   if (runningOnProdHost) {
-    if (appEnv === 'staging') {
+    // Le domaine de production utilise exclusivement la configuration Firebase versionnée
+    // du projet livraisonjikjikoox. Les variables Hostinger ne peuvent pas le basculer vers staging.
+    if (
+      appEnv === 'staging' ||
+      (metaEnv.VITE_FIREBASE_PROJECT_ID || '').trim() !== PROTECTED_PROD_PROJECT_ID
+    ) {
       console.warn(
-        '[JikJikoox Express] VITE_APP_ENV=staging détecté sur livraison.jikjikoox.com : bascule sécurisée sur la configuration production.'
+        '[JikJikoox Express] Configuration Firebase staging ou divergente détectée sur le domaine production : configuration production forcée.'
       );
     }
-    const apiKey = isValidFirebaseApiKey(metaEnv.VITE_FIREBASE_API_KEY)
-      ? metaEnv.VITE_FIREBASE_API_KEY.trim()
-      : defaultFirebaseConfig.apiKey;
-    const storageBucket = isValidFirebaseBucket(metaEnv.VITE_FIREBASE_STORAGE_BUCKET)
-      ? metaEnv.VITE_FIREBASE_STORAGE_BUCKET.trim()
-      : defaultFirebaseConfig.storageBucket;
 
     return {
-      apiKey,
-      authDomain: (metaEnv.VITE_FIREBASE_AUTH_DOMAIN || defaultFirebaseConfig.authDomain).trim(),
-      projectId: (metaEnv.VITE_FIREBASE_PROJECT_ID || defaultFirebaseConfig.projectId).trim(),
-      storageBucket,
-      messagingSenderId: (
-        metaEnv.VITE_FIREBASE_MESSAGING_SENDER_ID || defaultFirebaseConfig.messagingSenderId
-      ).trim(),
-      appId: (metaEnv.VITE_FIREBASE_APP_ID || defaultFirebaseConfig.appId).trim(),
-      firestoreDatabaseId: (
-        metaEnv.VITE_FIREBASE_FIRESTORE_DATABASE_ID || defaultFirebaseConfig.firestoreDatabaseId
-      ).trim(),
+      apiKey: defaultFirebaseConfig.apiKey,
+      authDomain: PROTECTED_PROD_AUTH_DOMAIN,
+      projectId: PROTECTED_PROD_PROJECT_ID,
+      storageBucket: PROTECTED_PROD_STORAGE_BUCKET,
+      messagingSenderId: defaultFirebaseConfig.messagingSenderId,
+      appId: defaultFirebaseConfig.appId,
+      firestoreDatabaseId: defaultFirebaseConfig.firestoreDatabaseId,
     };
   }
 
