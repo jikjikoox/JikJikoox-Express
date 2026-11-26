@@ -5,9 +5,9 @@ Utiliser cette checklist comme porte **Go / No-Go** avant toute action sur l’e
 ---
 
 ## 1. Isolation absolue Staging vs Production
-- [ ] Projet Firebase staging distinct (`livraisonjikjikoox-staging`), **jamais** `livraisonjikjikoox`.
+- [ ] Projet Firebase staging distinct (`jikjikoox-express-staging`), **jamais** `livraisonjikjikoox`.
 - [ ] Projet Supabase staging distinct (`<STAGING_PROJECT_REF>`), **jamais** le projet Supabase marketplace de production.
-- [ ] Domaines autorisés strictement staging (`staging-livraison.jikjikoox.com`, `staging-admin.jikjikoox.com`).
+- [ ] Domaines autorisés strictement staging (`staging-livraison.jikjikoox.com`).
 - [ ] `npm run validate:staging -- .env.staging` exécuté et **PASS** (0 erreur).
 - [ ] `PROD_SUPABASE_HOST="<prod-ref>.supabase.co" npm run validate:staging -- .env.staging --backend` exécuté et **PASS**.
 - [ ] Aucun fichier `.env.staging`, `.env.local` ou clé privée `.json`/`.pem` suivi par Git (`git status` propre).
@@ -23,7 +23,7 @@ Utiliser cette checklist comme porte **Go / No-Go** avant toute action sur l’e
 - [ ] Bucket Supabase `delivery-proofs` configuré en **privé** (`Public: OFF`), limite `5 Mo`, MIME `image/jpeg`, `image/png`, `image/webp`.
 - [ ] Aucune règle publique sur `storage.objects` pour `delivery-proofs`.
 - [ ] URLs signées générées par `delivery-proof` bornées à `120s` maximum et confinées par `<firebase_uid>/<delivery_id>/`.
-- [ ] Règles `storage.rules` déployées sur `livraisonjikjikoox-staging` uniquement (`allow update, delete: if false` sur `/delivery_proofs`).
+- [ ] Règles `storage.rules` déployées sur `jikjikoox-express-staging` uniquement (`allow update, delete: if false` sur `/delivery_proofs`).
 
 ## 4. Sécurité Edge Functions & Firebase Rules
 - [ ] Toutes les Edge Functions vérifient la signature cryptographique RS256 du Firebase ID Token avec `FIREBASE_PROJECT_ID=livraisonjikjikoox-staging`.
