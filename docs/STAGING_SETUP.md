@@ -14,7 +14,7 @@
 | Projet Firebase | `livraisonjikjikoox` | `jikjikoox-express-staging` (projet staging confirmé) |
 | Auth Domain Firebase | `livraisonjikjikoox.firebaseapp.com` | Valeur exacte à relever dans les paramètres de `jikjikoox-express-staging` |
 | Storage Bucket Firebase | `livraisonjikjikoox.firebasestorage.app` | Bucket exact à relever dans `jikjikoox-express-staging` |
-| Projet Supabase | Projet marketplace officiel JikJikoox (`dllafwvyfjodblxhshko`) | `jikjikoox-express-staging` (`bwicndbbxvthbddiacks`) |
+| Projet Supabase | Marketplace officiel (`dllafwvyfjodblxhshko`) | `jikjikoox-express-staging` — ref `bwicndbbxvthbddiacks` |
 | Variable `VITE_APP_ENV` | `production` (ou non staging) | `staging` (active le blocage anti-prod dans `src/lib/firebase.ts`) |
 | Fichier env local | Jamais versionné | `.env.staging` (créé à partir de `.env.staging.example`, ignoré par Git) |
 
@@ -22,13 +22,14 @@
 
 ## 2. Procédure Supabase Staging (10 étapes)
 
-### Étape 1 — Créer un projet Supabase staging indépendant
-1. Dans Supabase Dashboard, créer un nouveau projet (ex. `jikjikoox-staging`, région proche Europe/Afrique de l’Ouest, mot de passe DB dédié).
-2. Ne jamais lier la CLI locale au projet de production : vérifier le `project-ref` staging avant toute commande.
+### Étape 1 — Sélectionner le projet Supabase staging existant
+1. Utiliser exclusivement le projet `jikjikoox-express-staging` (`bwicndbbxvthbddiacks`, région `eu-west-1`) déjà provisionné.
+2. Ne pas créer un nouveau projet et ne jamais sélectionner le projet marketplace `dllafwvyfjodblxhshko`.
+3. Avant toute commande, vérifier que le `project-ref` est exactement `bwicndbbxvthbddiacks`.
 
 ### Étape 2 — Identifier son URL et ses clés
 - Relever uniquement :
-  - `Project URL` → servira pour le secret backend `SUPABASE_URL` et pour `VITE_SUPABASE_FUNCTIONS_URL` (`https://<staging-ref>.supabase.co/functions/v1`).
+  - `Project URL` → servira pour le secret backend `SUPABASE_URL` et pour `VITE_SUPABASE_FUNCTIONS_URL` (`https://bwicndbbxvthbddiacks.supabase.co/functions/v1`).
   - `service_role` key → **exclusivement** pour le secret Edge Function `SUPABASE_SERVICE_ROLE_KEY` (jamais dans le frontend).
 
 ### Étape 3 — Exécuter l’inspection en lecture seule (`00_inspect_existing_schema.sql`)
@@ -52,8 +53,8 @@ Ne pas appliquer `20261125000001_jikjikoox_express_additive.sql` tant que tous l
 ### Étape 6 — Appliquer uniquement la migration additive validée
 Via Supabase CLI pointée sur le `project-ref` staging (ou SQL Editor staging) :
 ```bash
-supabase link --project-ref <STAGING_PROJECT_REF>
-supabase db push
+supabase link --project-ref bwicndbbxvthbddiacks
+supabase db push --linked
 ```
 *(Ou exécuter manuellement `supabase/migrations/20261125000001_jikjikoox_express_additive.sql` dans le SQL Editor du projet staging uniquement.)*
 
@@ -66,19 +67,19 @@ supabase db push
 
 ### Étape 9 — Déployer les Edge Functions sur staging uniquement
 ```bash
-supabase functions deploy driver-profile --project-ref <STAGING_PROJECT_REF> --no-verify-jwt
-supabase functions deploy driver-deliveries --project-ref <STAGING_PROJECT_REF> --no-verify-jwt
-supabase functions deploy delivery-action --project-ref <STAGING_PROJECT_REF> --no-verify-jwt
-supabase functions deploy delivery-proof --project-ref <STAGING_PROJECT_REF> --no-verify-jwt
-supabase functions deploy driver-notifications --project-ref <STAGING_PROJECT_REF> --no-verify-jwt
-supabase functions deploy sync-assignment-to-firestore --project-ref <STAGING_PROJECT_REF> --no-verify-jwt
+supabase functions deploy driver-profile --project-ref bwicndbbxvthbddiacks --no-verify-jwt
+supabase functions deploy driver-deliveries --project-ref bwicndbbxvthbddiacks --no-verify-jwt
+supabase functions deploy delivery-action --project-ref bwicndbbxvthbddiacks --no-verify-jwt
+supabase functions deploy delivery-proof --project-ref bwicndbbxvthbddiacks --no-verify-jwt
+supabase functions deploy driver-notifications --project-ref bwicndbbxvthbddiacks --no-verify-jwt
+supabase functions deploy sync-assignment-to-firestore --project-ref bwicndbbxvthbddiacks --no-verify-jwt
 ```
 > **Note `--no-verify-jwt`** : les requêtes portent un **Firebase ID Token RS256** (et non un JWT Supabase Auth). La validation cryptographique RS256 complète est exécutée explicitement dans chaque fonction via `supabase/functions/_shared/firebaseAuth.ts`.
 
 ### Étape 10 — Configurer les secrets backend staging
-Configurer uniquement sur `<STAGING_PROJECT_REF>` (sans jamais stocker de valeurs dans Git) :
+Configurer uniquement sur `bwicndbbxvthbddiacks` (sans jamais stocker de valeurs dans Git) :
 ```bash
-supabase secrets set --project-ref <STAGING_PROJECT_REF> \
+supabase secrets set --project-ref bwicndbbxvthbddiacks \
   SUPABASE_URL="https://<STAGING_PROJECT_REF>.supabase.co" \
   SUPABASE_SERVICE_ROLE_KEY="<STAGING_SERVICE_ROLE_KEY>" \
   FIREBASE_PROJECT_ID="jikjikoox-express-staging" \
