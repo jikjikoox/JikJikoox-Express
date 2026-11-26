@@ -654,11 +654,12 @@ async function main() {
     await check('Test 1 — Auth', 'E02', 'Nouveau compte Google inscrit en pending (jamais auto-activé) et bloqué sur /driver-deliveries', async () => {
       const profRes = await handleDriverProfileRequest(
         new Request('https://stg/driver-profile', {
-          method: 'GET',
-          headers: { Authorization: `Bearer ${tokenNewUser}` },
+          method: 'POST',
+          headers: { Authorization: `Bearer ${tokenNewUser}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ firstName: 'Nouveau', lastName: 'Livreur QA', phone: '+221 77 000 00 04', vehicleType: 'scooter', workZone: 'Dakar' }),
         })
       );
-      assert.equal(profRes.status, 200);
+      assert.equal(profRes.status, 201);
       const prof = (await profRes.json()) as { profile: { account_status: string; is_available: boolean } };
       assert.equal(prof.profile.account_status, 'pending');
       assert.equal(prof.profile.is_available, false);
@@ -872,7 +873,7 @@ async function main() {
       assert.equal(body.drivers[0].lng, -17.5142);
     });
 
-    await check('Test 6 — Preuve', 'E10', 'Upload preuve autorisé à ARRIVED (MIME/taille validés, chemin confiné, URL signée TTL 120s) et refusé à Livreur B', async () => {
+    await check('Test 6 — Preuve', 'E10', 'Préparation upload preuve autorisée à ARRIVED (MIME/taille validés, chemin confiné, URL signée TTL 120s) et refusée à Livreur B', async () => {
       // Livreur B bloqué (403)
       const crossProof = await handleDeliveryProofRequest(
         new Request('https://stg/delivery-proof', {
@@ -918,7 +919,7 @@ async function main() {
           }),
         })
       );
-      assert.equal(okRes.status, 201);
+      assert.equal(okRes.status, 200);
       const proof = (await okRes.json()) as {
         storagePath: string;
         signedUploadUrl: string;
