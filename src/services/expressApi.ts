@@ -237,6 +237,14 @@ export function createExpressApiClient(options: ExpressApiOptions = {}) {
       });
     },
 
+    confirmCodQrPayment(idToken: string, params: { token: string; amount: number; orderReference: string }) {
+      return request<{ ok: true; message: string; order_reference: string; amount: number; currency: string; payment_id: string; confirmed_at: string }>(
+        'express-cod-payment-confirm',
+        idToken,
+        { method: 'POST', body: { token: params.token, amount: params.amount, order_reference: params.orderReference }, retryable: false }
+      );
+    },
+
     fetchDriverDeliveries(idToken: string) {
       return request<DriverDeliveriesEdgeResponse>('driver-deliveries', idToken, {
         method: 'GET',
