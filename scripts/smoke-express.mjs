@@ -28,6 +28,12 @@ if (!asset.ok || !/(javascript|ecmascript)/i.test(asset.headers.get('content-typ
 }
 const bundle = await asset.text();
 if (!bundle.trim() || /<html[\s>]/i.test(bundle.slice(0, 400))) throw new Error('Express JS bundle empty or HTML fallback.');
+if (!bundle.includes('https://dllafwvyfjodblxhshko.supabase.co/functions/v1')) {
+  throw new Error('Production bundle is not configured for the JikJikoox marketplace Supabase project.');
+}
+if (bundle.includes('https://bwicndbbxvthbddiacks.supabase.co/functions/v1')) {
+  throw new Error('Production bundle still points to the isolated Express staging project.');
+}
 
 const health = await fetchChecked(new URL('/healthz', baseUrl));
 if (!health.ok) throw new Error(`Express /healthz failed: HTTP ${health.status}`);
