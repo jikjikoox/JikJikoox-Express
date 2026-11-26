@@ -1,15 +1,32 @@
-# Exact Gitleaks fingerprints reviewed on 2026-11-26.
-# Findings are Firebase browser API-key config, a REPLACE_ME sample, and ephemeral/test fixtures.
-# Firebase browser API keys must still be restricted in Google Cloud Console.
-# This exact-fingerprint allowlist does NOT suppress newly detected secrets.
-[allowlist]
-description = "Reviewed public Firebase config and test-fixture fingerprints only"
-fingerprints = [
-  "31062831d4232906ead16dee807f176f6acff323:.env.staging.example:gcp-api-key:8",
-  "e632d524bc418861972560cad793c0eff11a7df8:firebase-applet-config.json:gcp-api-key:4",
-  "e632d524bc418861972560cad793c0eff11a7df8:tests/staging.e2e.harness.test.ts:private-key:80",
-  "e632d524bc418861972560cad793c0eff11a7df8:tests/staging.e2e.harness.test.ts:generic-api-key:847",
-  "/repo/firebase-applet-config.json:gcp-api-key:4",
-  "/repo/tests/staging.e2e.harness.test.ts:generic-api-key:847",
-  "/repo/tests/staging.e2e.harness.test.ts:private-key:80",
-]
+title = "JikJikoox Express Gitleaks exceptions — reviewed false positives"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Firebase browser API key in public app configuration (restrict in Google Cloud)"
+condition = "AND"
+paths = ['''(^|/)firebase-applet-config\.json$''']
+regexTarget = "line"
+regexes = ['''"apiKey"\s*:\s*"AIza''']
+
+[[allowlists]]
+description = "Firebase browser API key in staging example config"
+condition = "AND"
+paths = ['''(^|/)\.env\.staging\.example$''']
+regexTarget = "line"
+regexes = ['''VITE_FIREBASE_API_KEY\s*=\s*AIza''']
+
+[[allowlists]]
+description = "Private key is generated in-memory for tests; no key material committed"
+condition = "AND"
+paths = ['''(^|/)tests/staging\.e2e\.harness\.test\.ts$''']
+regexTarget = "line"
+regexes = ['''privateKeyPem\s*=\s*''']
+
+[[allowlists]]
+description = "Synthetic delivery idempotency test fixture"
+condition = "AND"
+paths = ['''(^|/)tests/staging\.e2e\.harness\.test\.ts$''']
+regexTarget = "line"
+regexes = ['''deliverKey\s*=\s*"stg-deliver-idempotent-001"''']
