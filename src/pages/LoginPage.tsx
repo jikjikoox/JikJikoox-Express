@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import {
   createUserWithEmailAndPassword,
   sendEmailVerification,
@@ -64,7 +64,7 @@ export function LoginPage() {
     setView(next); setError(null); setNotice(null);
   };
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null); setNotice(null);
     const cleanEmail = email.trim().toLowerCase();
