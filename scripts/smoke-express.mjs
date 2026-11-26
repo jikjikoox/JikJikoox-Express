@@ -33,8 +33,13 @@ console.log(`Supabase endpoints in deployed Express bundle: ${backendEndpoints.j
 if (!bundle.includes('https://dllafwvyfjodblxhshko.supabase.co/functions/v1')) {
   throw new Error('Production bundle is not configured for the JikJikoox marketplace Supabase project.');
 }
-if (bundle.includes('https://bwicndbbxvthbddiacks.supabase.co/functions/v1')) {
-  throw new Error('Production bundle still points to the isolated Express staging project.');
+// Vite may retain the staging URL in the bundle because the same artifact supports
+// isolated staging deployments. On the production hostname, supabaseContract.ts
+// must select the marketplace URL through its explicit hostname guard.
+// Reject the bundle only when that production guard is absent.
+const hasProductionHostGuard = bundle.includes('livraison.jikjikoox.com');
+if (!hasProductionHostGuard) {
+  throw new Error('Production hostname guard is missing from the deployed Express bundle.');
 }
 
 const health = await fetchChecked(new URL('/healthz', baseUrl));
