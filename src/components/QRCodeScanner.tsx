@@ -32,6 +32,8 @@ export interface QRCodeScannerProps {
   instantDeliveryOnMatch?: boolean;
   onClose: () => void;
   onValidated: (result: QrValidationSuccess) => void | Promise<void>;
+  codPaymentMode?: boolean;
+  onCodPayload?: (rawPayload: string) => void | Promise<void>;
 }
 
 type CameraStatus = 'starting' | 'active' | 'error' | 'matched';
@@ -46,6 +48,8 @@ export function QRCodeScanner({
   instantDeliveryOnMatch = false,
   onClose,
   onValidated,
+  codPaymentMode = false,
+  onCodPayload,
 }: QRCodeScannerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -88,6 +92,24 @@ export function QRCodeScanner({
   const handleDecodedPayload = useCallback(
     async (rawValue: string) => {
       if (lockedRef.current) return;
+      if (codPaymentMode) {
+        lockedRef.current = true;
+        setMismatchMessage(null);
+        setFinalizing(true);
+        stopCamera();
+        try {
+          await onCodPayload?.(rawValue);
+          onClose();
+        } catch (error) {
+          setMismatchMessage(error instanceof Error ? error.message : "QR de paiement refusé.");
+          lockedRef.current = false;
+          setCameraStatus("active");
+          void startCamera();
+        } finally {
+          setFinalizing(false);
+        }
+        return;
+      }
       const result = validateParcelQrForMission(rawValue, mission);
 
       if (!result.ok) {
@@ -124,7 +146,7 @@ export function QRCodeScanner({
         setFinalizing(false);
       }
     },
-    [mission, onValidated, stopCamera]
+    [mission, onValidated, codPaymentMode, onCodPayload, onClose, stopCamera, startCamera]
   );
 
   const startCamera = useCallback(async () => {
@@ -374,7 +396,7 @@ export function QRCodeScanner({
               {mission.orderNumber} · {mission.missionId}
             </p>
             <h2 id="qr-scanner-title" className="text-base font-bold text-white truncate">
-              Validation rapide par QR code
+              codPaymentMode ? "Scanner le QR de paiement COD" : "Validation rapide par QR code"
             </h2>
           </div>
 
