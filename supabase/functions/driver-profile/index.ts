@@ -50,7 +50,7 @@ export async function handleDriverProfileRequest(req: Request): Promise<Response
         !raw || firstName.length < 2 || firstName.length > 60 ||
         lastName.length < 2 || lastName.length > 60 ||
         phone.length < 8 || phone.length > 24 ||
-        !/^\\+?[0-9][0-9 .()-]{6,22}$/.test(phone) ||
+        !/^\+?[0-9][0-9 .()-]{6,22}$/.test(phone) ||
         !ALLOWED_VEHICLES.has(vehicleType) || workZone.length < 2 || workZone.length > 80
       ) {
         return errorResponse('INVALID_REGISTRATION', 'Vérifiez les informations de votre inscription.', 400, cors);
