@@ -1,4 +1,6 @@
 import {
+  type AdminDriversListEdgeResponse,
+  type AdminDriverUpdateEdgeResponse,
   type AdminFleetLocationsEdgeResponse,
   buildIdempotencyKey,
   type DeliveryActionEdgeResponse,
@@ -15,7 +17,7 @@ import {
   getSupabaseFunctionsBaseUrl,
   isSupabaseBackendConfigured,
 } from '../lib/supabaseContract';
-import type { MissionStatus, ProofSubmission, VehicleType } from '../types/delivery';
+import type { AccountStatus, MissionStatus, ProofSubmission, VehicleType } from '../types/delivery';
 
 /**
  * Service frontend centralisé JikJikoox Express -> Supabase Edge Functions.
@@ -49,9 +51,14 @@ export interface ExpressApiOptions {
 const FRIENDLY_ERROR_MESSAGES: Record<string, string> = {
   TOKEN_EXPIRED: 'Votre session a expiré. Veuillez vous reconnecter.',
   TOKEN_INVALID: 'Authentification invalide. Veuillez vous reconnecter.',
-  DRIVER_PENDING: 'Votre compte est en attente de validation par JikJikoox Admin.',
-  DRIVER_SUSPENDED: 'Votre compte livreur est suspendu.',
+  EMAIL_NOT_VERIFIED: 'Veuillez confirmer votre adresse e-mail via le lien reçu avant de continuer.',
+  DRIVER_NOT_REGISTERED: 'Aucun profil livreur n’est encore associé à ce compte.',
+  DRIVER_PENDING: 'Votre compte est en attente de validation.',
+  DRIVER_SUSPENDED: 'Votre compte livreur est temporairement suspendu.',
   DRIVER_DISABLED: 'Votre compte livreur est désactivé.',
+  TERMS_REQUIRED: 'Vous devez accepter les conditions d’utilisation pour créer votre compte.',
+  REGISTRATION_ALREADY_EXISTS: 'Un profil livreur existe déjà pour ce compte.',
+  ADMIN_REQUIRED: 'Accès réservé aux administrateurs JikJikoox Express.',
   ADMIN_FORBIDDEN: 'Accès réservé aux administrateurs JikJikoox Express.',
   MISSION_FORBIDDEN: 'Cette mission ne vous est pas attribuée.',
   MISSION_NOT_FOUND: 'Mission introuvable.',
@@ -208,6 +215,7 @@ export function createExpressApiClient(options: ExpressApiOptions = {}) {
         phone: string;
         vehicleType: VehicleType;
         workZone: string;
+        termsAccepted: boolean;
       }
     ) {
       return request<DriverProfileEdgeResponse>('driver-profile', idToken, {
@@ -384,6 +392,29 @@ export function createExpressApiClient(options: ExpressApiOptions = {}) {
       return request<AdminFleetLocationsEdgeResponse>('admin-driver-locations', idToken, {
         method: 'GET',
         retryable: true,
+      });
+    },
+
+    /** Gestion administrative des comptes livreurs (validation, refus, suspension) */
+    fetchAdminDrivers(idToken: string, status?: AccountStatus) {
+      const path = status ? `admin-drivers?status=${encodeURIComponent(status)}` : 'admin-drivers';
+      return request<AdminDriversListEdgeResponse>(path, idToken, {
+        method: 'GET',
+        retryable: true,
+      });
+    },
+
+    updateAdminDriverStatus(
+      idToken: string,
+      payload: {
+        driverId: string;
+        accountStatus: 'active' | 'suspended' | 'disabled';
+      }
+    ) {
+      return request<AdminDriverUpdateEdgeResponse>('admin-drivers', idToken, {
+        method: 'PATCH',
+        body: payload,
+        retryable: false,
       });
     },
 

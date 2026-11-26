@@ -9,6 +9,7 @@ import {
   Map as MapIcon,
   Power,
   User as UserIcon,
+  Users,
   X,
 } from 'lucide-react';
 import { useCourierApp } from '../context/CourierAppContext';
@@ -51,12 +52,13 @@ export function AppShell({
     logout,
   } = useCourierApp();
 
-  const showFleetTab = isAdminUser || mode === 'demo';
-  const desktopNavItems = showFleetTab
+  const showAdminTabs = isAdminUser || mode === 'demo';
+  const desktopNavItems = showAdminTabs
     ? [
         BASE_NAV_ITEMS[0],
         BASE_NAV_ITEMS[1],
         { id: 'fleet' as AppTab, label: 'Carte GPS', icon: MapIcon },
+        { id: 'drivers' as AppTab, label: 'Validation livreurs', icon: Users },
         BASE_NAV_ITEMS[2],
         BASE_NAV_ITEMS[3],
         BASE_NAV_ITEMS[4],
@@ -207,20 +209,35 @@ export function AppShell({
             </div>
 
             <div className="flex items-center gap-1.5 shrink-0">
-              {showFleetTab && (
-                <button
-                  type="button"
-                  onClick={() => onSelectTab('fleet')}
-                  aria-label="Ouvrir la carte GPS de la flotte"
-                  className={`min-w-[36px] min-h-[36px] px-2.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1 transition-colors cursor-pointer ${
-                    activeTab === 'fleet'
-                      ? 'bg-[#0E6E2D] text-white'
-                      : 'bg-[#F7F6F2] text-[#141413]'
-                  }`}
-                >
-                  <MapIcon className="w-4 h-4" aria-hidden="true" />
-                  <span className="sr-only sm:not-sr-only">GPS</span>
-                </button>
+              {showAdminTabs && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onSelectTab('fleet')}
+                    aria-label="Ouvrir la carte GPS de la flotte"
+                    className={`min-w-[36px] min-h-[36px] px-2.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1 transition-colors cursor-pointer ${
+                      activeTab === 'fleet'
+                        ? 'bg-[#0E6E2D] text-white'
+                        : 'bg-[#F7F6F2] text-[#141413]'
+                    }`}
+                  >
+                    <MapIcon className="w-4 h-4" aria-hidden="true" />
+                    <span className="sr-only sm:not-sr-only">GPS</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onSelectTab('drivers')}
+                    aria-label="Valider les comptes livreurs"
+                    className={`min-w-[36px] min-h-[36px] px-2.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1 transition-colors cursor-pointer ${
+                      activeTab === 'drivers'
+                        ? 'bg-[#0E6E2D] text-white'
+                        : 'bg-[#F7F6F2] text-[#141413]'
+                    }`}
+                  >
+                    <Users className="w-4 h-4" aria-hidden="true" />
+                    <span className="sr-only sm:not-sr-only">Livreurs</span>
+                  </button>
+                </>
               )}
               {profile && (
                 <button

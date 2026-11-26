@@ -26,7 +26,14 @@ export type NotificationCategory =
   | 'operational'
   | 'confirmation';
 
-export type AppTab = 'dashboard' | 'missions' | 'fleet' | 'history' | 'notifications' | 'profile';
+export type AppTab =
+  | 'dashboard'
+  | 'missions'
+  | 'fleet'
+  | 'drivers'
+  | 'history'
+  | 'notifications'
+  | 'profile';
 
 export interface MissionItem {
   name: string;

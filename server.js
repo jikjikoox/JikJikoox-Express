@@ -41,7 +41,11 @@ const compressedCache = new Map();
 
 function getCacheControlForFile(filePath) {
   const rel = path.relative(distDir, filePath).split(path.sep).join('/');
-  if (rel.endsWith('.html')) {
+  if (
+    rel.endsWith('.html') ||
+    rel === 'firebase-messaging-sw.js' ||
+    rel === 'manifest.webmanifest'
+  ) {
     return 'no-cache';
   }
   if (/^assets\/[^/]+-[A-Za-z0-9_-]{6,}\.(js|mjs|css|woff2?)$/.test(rel)) {

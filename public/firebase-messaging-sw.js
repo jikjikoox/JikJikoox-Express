@@ -1,16 +1,50 @@
 /* eslint-disable no-undef */
 /**
- * JikJikoox Express — Service Worker Web Push (Firebase Cloud Messaging)
- * Gère les notifications en arrière-plan sur mobile, tablette et ordinateur,
- * évite les doublons via `tag` (dedupeKey) et ouvre directement la mission concernée au clic.
+ * JikJikoox Express — Service Worker unifié (Web Push FCM + App-Shell PWA)
+ * - Gère les notifications en arrière-plan sur mobile, tablette et ordinateur,
+ *   évite les doublons via `tag` (dedupeKey) et ouvre directement la mission concernée au clic.
+ * - Met en cache uniquement les ressources statiques de l'app-shell pour un lancement rapide
+ *   et une détection fiable hors connexion, sans jamais mettre en cache les API authentifiées.
  */
 
-self.addEventListener('install', () => {
-  self.skipWaiting();
+const EXPRESS_CACHE = 'jikjikoox-express-shell-v2';
+const PRECACHE_URLS = [
+  '/',
+  '/manifest.webmanifest',
+  '/pwa-192x192.png',
+  '/pwa-512x512.png',
+  '/apple-touch-icon.png',
+  '/pwa-icon.svg',
+];
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches
+      .open(EXPRESS_CACHE)
+      .then((cache) =>
+        Promise.all(
+          PRECACHE_URLS.map((url) =>
+            cache.add(url).catch(() => undefined)
+          )
+        )
+      )
+      .finally(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(
+          keys
+            .filter((key) => key.startsWith('jikjikoox-express-') && key !== EXPRESS_CACHE)
+            .map((key) => caches.delete(key))
+        )
+      )
+      .then(() => self.clients.claim())
+  );
 });
 
 self.addEventListener('push', (event) => {
@@ -36,8 +70,8 @@ self.addEventListener('push', (event) => {
 
   const options = {
     body,
-    icon: '/favicon.svg',
-    badge: '/favicon.svg',
+    icon: '/pwa-192x192.png',
+    badge: '/pwa-192x192.png',
     tag,
     renotify: true,
     data: {
@@ -73,35 +107,62 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
+function isExcludedPath(pathname) {
+  return (
+    pathname.startsWith('/functions/') ||
+    pathname.startsWith('/rest/') ||
+    pathname.startsWith('/storage/') ||
+    pathname.startsWith('/api/') ||
+    pathname === '/healthz' ||
+    pathname === '/firebase-messaging-sw.js'
+  );
+}
 
-// App-shell cache for the installable JikJikoox Express PWA.
-// This is deliberately the same root-scope worker used by Firebase Messaging.
-const EXPRESS_CACHE = 'jikjikoox-express-shell-v1';
 self.addEventListener('fetch', (event) => {
   const request = event.request;
+  if (request.method !== 'GET') return;
+
   const url = new URL(request.url);
-  if (request.method !== 'GET' || url.origin !== self.location.origin) return;
-  if (url.pathname.startsWith('/functions/') || url.pathname.startsWith('/rest/')) return;
+  if (url.origin !== self.location.origin) return;
+  if (isExcludedPath(url.pathname)) return;
 
   if (request.mode === 'navigate') {
-    event.respondWith(fetch(request).then((response) => {
-      if (response.ok) {
-        const copy = response.clone();
-        caches.open(EXPRESS_CACHE).then((cache) => cache.put('/', copy));
-      }
-      return response;
-    }).catch(async () => (await caches.match(request)) || (await caches.match('/'))));
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response.ok && response.type === 'basic') {
+            const copy = response.clone();
+            caches.open(EXPRESS_CACHE).then((cache) => cache.put('/', copy)).catch(() => undefined);
+          }
+          return response;
+        })
+        .catch(async () => {
+          const cached = (await caches.match(request)) || (await caches.match('/'));
+          return (
+            cached ||
+            new Response('JikJikoox Express est hors connexion. Reconnectez-vous pour synchroniser.', {
+              status: 503,
+              headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+            })
+          );
+        })
+    );
     return;
   }
 
-  event.respondWith(caches.match(request).then((cached) => {
-    const network = fetch(request).then((response) => {
-      if (response.ok && response.type === 'basic') {
-        const copy = response.clone();
-        caches.open(EXPRESS_CACHE).then((cache) => cache.put(request, copy));
-      }
-      return response;
-    });
-    return cached || network;
-  }));
+  event.respondWith(
+    caches.match(request).then((cached) => {
+      const networkFetch = fetch(request)
+        .then((response) => {
+          if (response.ok && response.type === 'basic') {
+            const copy = response.clone();
+            caches.open(EXPRESS_CACHE).then((cache) => cache.put(request, copy)).catch(() => undefined);
+          }
+          return response;
+        })
+        .catch(() => cached || Response.error());
+
+      return cached || networkFetch;
+    })
+  );
 });

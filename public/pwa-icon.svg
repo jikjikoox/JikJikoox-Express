@@ -1,9 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#0E6E2D"/>
-  <path d="M92 154h214c20 0 36 16 36 36v130H92c-20 0-36-16-36-36V190c0-20 16-36 36-36Z" fill="#fff"/>
-  <path d="M342 218h54c11 0 21 5 27 14l42 59v29H342V218Z" fill="#F4A61D"/>
-  <circle cx="151" cy="337" r="39" fill="#141413" stroke="#fff" stroke-width="13"/>
-  <circle cx="393" cy="337" r="39" fill="#141413" stroke="#fff" stroke-width="13"/>
-  <path d="M123 210h147M123 246h104" stroke="#0E6E2D" stroke-width="17" stroke-linecap="round"/>
-  <path d="M287 92c-46 19-72 56-73 102 35-4 70-25 89-61 11-21 11-33 11-41-9-2-17-2-27 0Z" fill="#F4A61D"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="JikJikoox Express">
+  <rect width="512" height="512" rx="112" fill="#0E6E2D" />
+  <rect x="28" y="28" width="456" height="456" rx="92" fill="none" stroke="#F4A61D" stroke-width="14" stroke-opacity="0.9" />
+  <g fill="none" stroke="#FFFFFF" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M124 276h174c18 0 32-14 32-32v-54H172c-26 0-48 22-48 48v38Z" fill="#FFFFFF" fill-opacity="0.12" stroke-width="18" />
+    <path d="M330 210h42l32 42v24h-74v-66Z" fill="#F4A61D" stroke="#F4A61D" stroke-width="14" />
+    <circle cx="182" cy="316" r="34" fill="#0E6E2D" stroke="#FFFFFF" stroke-width="18" />
+    <circle cx="352" cy="316" r="34" fill="#0E6E2D" stroke="#FFFFFF" stroke-width="18" />
+    <path d="M116 154h112" stroke="#F4A61D" stroke-width="18" />
+    <path d="M96 196h76" stroke="#FFFFFF" stroke-width="14" stroke-opacity="0.85" />
+  </g>
 </svg>

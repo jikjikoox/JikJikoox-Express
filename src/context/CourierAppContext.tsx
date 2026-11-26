@@ -93,14 +93,25 @@ export interface ProofPhotoUploadResult {
   uploadVerified: boolean;
 }
 
+export interface CourierRegistrationInput {
+  firstName: string;
+  lastName: string;
+  phone: string;
+  vehicleType: VehicleType;
+  workZone: string;
+  termsAccepted: boolean;
+}
+
 interface CourierAppContextValue {
   mode: SessionMode;
   backendConnected: boolean;
+  isOnline: boolean;
   authReady: boolean;
   loadingData: boolean;
   firebaseUser: User | null;
   isAdminUser: boolean;
   profile: CourierProfile | null;
+  profileNotFound: boolean;
   missions: DeliveryMission[];
   notifications: CourierNotification[];
   unreadCount: number;
@@ -111,6 +122,7 @@ interface CourierAppContextValue {
   dismissToast: () => void;
   showToast: (text: string, tone?: 'green' | 'yellow' | 'red') => void;
   signInWithGoogle: () => Promise<void>;
+  completeCourierRegistration: (input: CourierRegistrationInput) => Promise<boolean>;
   enterDemoMode: () => void;
   exitDemoMode: () => void;
   logout: () => Promise<void>;
@@ -179,19 +191,80 @@ function parseDisplayName(displayName: string | null | undefined, email: string)
   };
 }
 
+const OFFLINE_SNAPSHOT_PREFIX = 'jikjikoox_express_readonly_snapshot_v1:';
+
+interface ReadOnlyCourierSnapshot {
+  profile: CourierProfile;
+  missions: DeliveryMission[];
+  notifications: CourierNotification[];
+  savedAtIso: string;
+}
+
+function saveReadOnlySnapshot(uid: string, snapshot: ReadOnlyCourierSnapshot) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.setItem(`${OFFLINE_SNAPSHOT_PREFIX}${uid}`, JSON.stringify(snapshot));
+  } catch {
+    // Ignore quota errors in restricted storage environments
+  }
+}
+
+function loadReadOnlySnapshot(uid: string): ReadOnlyCourierSnapshot | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.sessionStorage.getItem(`${OFFLINE_SNAPSHOT_PREFIX}${uid}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as ReadOnlyCourierSnapshot;
+    if (!parsed?.profile || parsed.profile.uid !== uid) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function clearAllReadOnlySnapshots() {
+  if (typeof window === 'undefined') return;
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < window.sessionStorage.length; i++) {
+      const k = window.sessionStorage.key(i);
+      if (k && k.startsWith(OFFLINE_SNAPSHOT_PREFIX)) keys.push(k);
+    }
+    keys.forEach((k) => window.sessionStorage.removeItem(k));
+  } catch {
+    // Ignore storage access errors
+  }
+}
+
 export function CourierAppProvider({ children }: { children: React.ReactNode }) {
   const backendConnected = isSupabaseBackendConfigured();
 
   const [mode, setMode] = useState<SessionMode>('unauthenticated');
+  const [isOnline, setIsOnline] = useState<boolean>(
+    () => typeof navigator === 'undefined' || navigator.onLine !== false
+  );
   const [authReady, setAuthReady] = useState(false);
   const [loadingData, setLoadingData] = useState(false);
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   const [isAdminUser, setIsAdminUser] = useState(false);
   const [profile, setProfile] = useState<CourierProfile | null>(null);
+  const [profileNotFound, setProfileNotFound] = useState(false);
   const [missions, setMissions] = useState<DeliveryMission[]>([]);
   const [notifications, setNotifications] = useState<CourierNotification[]>([]);
   const [authError, setAuthError] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastMessage | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onOnline = () => setIsOnline(true);
+    const onOffline = () => setIsOnline(false);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+    };
+  }, []);
 
   const showToast = useCallback((text: string, tone: 'green' | 'yellow' | 'red' = 'green') => {
     setToast({ id: Date.now(), tone, text });
@@ -211,9 +284,12 @@ export function CourierAppProvider({ children }: { children: React.ReactNode }) 
       setFirebaseUser(user);
       if (user) {
         setMode((prev) => (prev === 'demo' ? 'demo' : 'firebase'));
+        setProfileNotFound(false);
         setAuthError(null);
       } else {
         setIsAdminUser(false);
+        setProfileNotFound(false);
+        clearAllReadOnlySnapshots();
         setMode((prev) => {
           if (prev === 'demo') return 'demo';
           setProfile(null);
@@ -230,10 +306,12 @@ export function CourierAppProvider({ children }: { children: React.ReactNode }) 
   // Chargement officiel depuis les Supabase Edge Functions (si configuré)
   const refreshBackendData = useCallback(async () => {
     if (mode !== 'firebase' || !firebaseUser || !backendConnected) return;
-    try {
-      const idToken = await firebaseUser.getIdToken();
+
+    const loadWithToken = async (forceRefresh: boolean) => {
+      const idToken = await firebaseUser.getIdToken(forceRefresh);
       const profileRes = await expressApi.fetchDriverProfile(idToken);
       const mappedProfile = mapEdgeDriverToProfile(profileRes.profile);
+      setProfileNotFound(false);
       setProfile(mappedProfile);
 
       if (mappedProfile.accountStatus === 'active') {
@@ -241,14 +319,61 @@ export function CourierAppProvider({ children }: { children: React.ReactNode }) 
           expressApi.fetchDriverDeliveries(idToken),
           expressApi.fetchNotifications(idToken),
         ]);
-        setMissions(delivRes.deliveries.map(mapEdgeDeliveryToMission));
-        setNotifications(notifRes.notifications.map(mapEdgeNotificationToClient));
+        const mappedMissions = delivRes.deliveries.map(mapEdgeDeliveryToMission);
+        const mappedNotifications = notifRes.notifications.map(mapEdgeNotificationToClient);
+        setMissions(mappedMissions);
+        setNotifications(mappedNotifications);
+        saveReadOnlySnapshot(firebaseUser.uid, {
+          profile: mappedProfile,
+          missions: mappedMissions,
+          notifications: mappedNotifications,
+          savedAtIso: new Date().toISOString(),
+        });
       } else {
         setMissions([]);
         setNotifications([]);
       }
+    };
+
+    try {
+      await loadWithToken(false);
     } catch (err) {
       if (err instanceof ExpressApiError) {
+        if (err.status === 404 && err.code === 'DRIVER_NOT_REGISTERED') {
+          setProfile(null);
+          setMissions([]);
+          setNotifications([]);
+          setProfileNotFound(true);
+          return;
+        }
+        if (err.status === 401 && (err.code === 'TOKEN_EXPIRED' || err.code === 'TOKEN_INVALID')) {
+          try {
+            await loadWithToken(true);
+            return;
+          } catch {
+            clearAllReadOnlySnapshots();
+            await signOut(auth).catch(() => undefined);
+            setMode('unauthenticated');
+            setProfile(null);
+            setMissions([]);
+            setNotifications([]);
+            setAuthError('Votre session a expiré. Veuillez vous reconnecter.');
+            return;
+          }
+        }
+        if (err.code === 'OFFLINE_NO_CONNECTION' || err.code === 'NETWORK_UNREACHABLE') {
+          const cached = loadReadOnlySnapshot(firebaseUser.uid);
+          if (cached) {
+            setProfile(cached.profile);
+            setMissions(cached.missions);
+            setNotifications(cached.notifications);
+            showToast(
+              'Mode hors connexion : affichage des dernières missions chargées (lecture seule).',
+              'yellow'
+            );
+            return;
+          }
+        }
         showToast(err.message, 'red');
       }
     }
@@ -503,9 +628,47 @@ export function CourierAppProvider({ children }: { children: React.ReactNode }) 
     }
   }, [showToast]);
 
+  const completeCourierRegistration = useCallback(
+    async (input: CourierRegistrationInput): Promise<boolean> => {
+      if (!firebaseUser) return false;
+      if (!backendConnected) {
+        showToast('Backend Supabase non configuré : inscription serveur indisponible.', 'red');
+        return false;
+      }
+      try {
+        const idToken = await firebaseUser.getIdToken(true);
+        const res = await expressApi.registerDriver(idToken, {
+          firstName: input.firstName.trim(),
+          lastName: input.lastName.trim(),
+          phone: input.phone.trim(),
+          vehicleType: input.vehicleType,
+          workZone: input.workZone.trim(),
+          termsAccepted: input.termsAccepted,
+        });
+        const mapped = mapEdgeDriverToProfile(res.profile);
+        setProfile(mapped);
+        setProfileNotFound(false);
+        showToast(
+          'Votre candidature livreur est enregistrée et en attente de validation administrative.',
+          'green'
+        );
+        return true;
+      } catch (err) {
+        const message =
+          err instanceof ExpressApiError
+            ? err.message
+            : 'Impossible de finaliser la création du profil livreur.';
+        showToast(message, 'red');
+        return false;
+      }
+    },
+    [firebaseUser, backendConnected, showToast]
+  );
+
   // Mode démonstration 100 % local en mémoire — ZERO appel Supabase / Firebase (chargé à la demande)
   const enterDemoMode = useCallback(() => {
     setAuthError(null);
+    setProfileNotFound(false);
     setLoadingData(true);
     void import('../data/demo/mockCourierData')
       .then(({ buildDemoMissions, buildDemoNotifications, DEMO_COURIER_PROFILE }) => {
@@ -522,6 +685,7 @@ export function CourierAppProvider({ children }: { children: React.ReactNode }) 
 
   const exitDemoMode = useCallback(() => {
     setProfile(null);
+    setProfileNotFound(false);
     setMissions([]);
     setNotifications([]);
     setMode(firebaseUser ? 'firebase' : 'unauthenticated');
@@ -791,12 +955,14 @@ export function CourierAppProvider({ children }: { children: React.ReactNode }) 
 
   const logout = useCallback(async () => {
     gpsTracker.stopTracking();
+    clearAllReadOnlySnapshots();
     if (firebaseUser) {
       await signOut(auth);
     }
     setMode('unauthenticated');
     setIsAdminUser(false);
     setProfile(null);
+    setProfileNotFound(false);
     setMissions([]);
     setNotifications([]);
     showToast('Session clôturée en toute sécurité.', 'green');
@@ -993,6 +1159,16 @@ export function CourierAppProvider({ children }: { children: React.ReactNode }) 
         return false;
       }
 
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        showToast(
+          nextStatus === 'DELIVERED'
+            ? 'Mode hors connexion : impossible de confirmer une livraison sans connexion Internet vérifiée.'
+            : 'Mode hors connexion : reconnectez-vous pour synchroniser le statut de la mission.',
+          'red'
+        );
+        return false;
+      }
+
       if (!backendConnected) {
         showToast(
           'Les transitions réelles nécessitent la connexion aux Edge Functions Supabase (configurez VITE_SUPABASE_FUNCTIONS_URL).',
@@ -1149,11 +1325,13 @@ export function CourierAppProvider({ children }: { children: React.ReactNode }) 
     () => ({
       mode,
       backendConnected,
+      isOnline,
       authReady,
       loadingData,
       firebaseUser,
       isAdminUser,
       profile,
+      profileNotFound,
       missions,
       notifications,
       unreadCount,
@@ -1164,6 +1342,7 @@ export function CourierAppProvider({ children }: { children: React.ReactNode }) 
       dismissToast,
       showToast,
       signInWithGoogle,
+      completeCourierRegistration,
       enterDemoMode,
       exitDemoMode,
       logout,
@@ -1180,11 +1359,13 @@ export function CourierAppProvider({ children }: { children: React.ReactNode }) 
     [
       mode,
       backendConnected,
+      isOnline,
       authReady,
       loadingData,
       firebaseUser,
       isAdminUser,
       profile,
+      profileNotFound,
       missions,
       notifications,
       unreadCount,
@@ -1195,6 +1376,7 @@ export function CourierAppProvider({ children }: { children: React.ReactNode }) 
       dismissToast,
       showToast,
       signInWithGoogle,
+      completeCourierRegistration,
       enterDemoMode,
       exitDemoMode,
       logout,

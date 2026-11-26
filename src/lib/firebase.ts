@@ -1,20 +1,76 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider } from 'firebase/auth';
+import {
+  browserLocalPersistence,
+  getAuth,
+  GoogleAuthProvider,
+  setPersistence,
+} from 'firebase/auth';
 import { doc, getDocFromServer, getFirestore } from 'firebase/firestore';
 import defaultFirebaseConfig from '../../firebase-applet-config.json';
 
 const PROTECTED_PROD_PROJECT_ID = 'livraisonjikjikoox';
 const PROTECTED_PROD_AUTH_DOMAIN = 'livraisonjikjikoox.firebaseapp.com';
 const PROTECTED_PROD_STORAGE_BUCKET = 'livraisonjikjikoox.firebasestorage.app';
+const PRODUCTION_HOSTNAMES = new Set(['livraison.jikjikoox.com']);
 
 const metaEnv = (import.meta as unknown as { env?: Record<string, string | undefined> }).env ?? {};
 const appEnv = (metaEnv.VITE_APP_ENV || '').trim().toLowerCase();
 
-const hasStagingFirebaseOverrides = Boolean(
-  metaEnv.VITE_FIREBASE_PROJECT_ID?.trim() && metaEnv.VITE_FIREBASE_API_KEY?.trim()
+function isValidFirebaseApiKey(value: string | undefined): value is string {
+  const trimmed = (value || '').trim();
+  return /^AIza[0-9A-Za-z_-]{20,}$/.test(trimmed);
+}
+
+function isValidFirebaseBucket(value: string | undefined): value is string {
+  const trimmed = (value || '').trim();
+  if (!trimmed || trimmed === '-' || trimmed === 'ivraisonjikjikoox.firebasestorage.app') {
+    return false;
+  }
+  return trimmed.includes('.');
+}
+
+function isProductionHost(): boolean {
+  if (typeof window === 'undefined') return false;
+  return PRODUCTION_HOSTNAMES.has(window.location.hostname.toLowerCase());
+}
+
+const hasValidFirebaseOverrides = Boolean(
+  metaEnv.VITE_FIREBASE_PROJECT_ID?.trim() && isValidFirebaseApiKey(metaEnv.VITE_FIREBASE_API_KEY)
 );
 
 function resolveFirebaseConfig() {
+  const runningOnProdHost = isProductionHost();
+
+  // Sur le domaine de production (livraison.jikjikoox.com), une variable Hostinger mal configurée
+  // (ex. VITE_APP_ENV=staging ou VITE_FIREBASE_API_KEY="-") ne doit jamais empêcher React de démarrer.
+  if (runningOnProdHost) {
+    if (appEnv === 'staging') {
+      console.warn(
+        '[JikJikoox Express] VITE_APP_ENV=staging détecté sur livraison.jikjikoox.com : bascule sécurisée sur la configuration production.'
+      );
+    }
+    const apiKey = isValidFirebaseApiKey(metaEnv.VITE_FIREBASE_API_KEY)
+      ? metaEnv.VITE_FIREBASE_API_KEY.trim()
+      : defaultFirebaseConfig.apiKey;
+    const storageBucket = isValidFirebaseBucket(metaEnv.VITE_FIREBASE_STORAGE_BUCKET)
+      ? metaEnv.VITE_FIREBASE_STORAGE_BUCKET.trim()
+      : defaultFirebaseConfig.storageBucket;
+
+    return {
+      apiKey,
+      authDomain: (metaEnv.VITE_FIREBASE_AUTH_DOMAIN || defaultFirebaseConfig.authDomain).trim(),
+      projectId: (metaEnv.VITE_FIREBASE_PROJECT_ID || defaultFirebaseConfig.projectId).trim(),
+      storageBucket,
+      messagingSenderId: (
+        metaEnv.VITE_FIREBASE_MESSAGING_SENDER_ID || defaultFirebaseConfig.messagingSenderId
+      ).trim(),
+      appId: (metaEnv.VITE_FIREBASE_APP_ID || defaultFirebaseConfig.appId).trim(),
+      firestoreDatabaseId: (
+        metaEnv.VITE_FIREBASE_FIRESTORE_DATABASE_ID || defaultFirebaseConfig.firestoreDatabaseId
+      ).trim(),
+    };
+  }
+
   if (appEnv === 'staging') {
     const projectId = (metaEnv.VITE_FIREBASE_PROJECT_ID || '').trim();
     const apiKey = (metaEnv.VITE_FIREBASE_API_KEY || '').trim();
@@ -24,7 +80,7 @@ function resolveFirebaseConfig() {
     const appId = (metaEnv.VITE_FIREBASE_APP_ID || '').trim();
     const firestoreDatabaseId = (metaEnv.VITE_FIREBASE_FIRESTORE_DATABASE_ID || '(default)').trim();
 
-    if (!projectId || !apiKey || !authDomain || !storageBucket || !messagingSenderId || !appId) {
+    if (!projectId || !isValidFirebaseApiKey(apiKey) || !authDomain || !isValidFirebaseBucket(storageBucket) || !messagingSenderId || !appId) {
       throw new Error(
         'STAGING_CONFIG_INCOMPLETE: Les variables VITE_FIREBASE_* de staging sont obligatoires lorsque VITE_APP_ENV=staging.'
       );
@@ -50,14 +106,14 @@ function resolveFirebaseConfig() {
     };
   }
 
-  if (hasStagingFirebaseOverrides) {
+  if (hasValidFirebaseOverrides) {
     return {
       apiKey: metaEnv.VITE_FIREBASE_API_KEY!.trim(),
       authDomain: (metaEnv.VITE_FIREBASE_AUTH_DOMAIN || defaultFirebaseConfig.authDomain).trim(),
       projectId: metaEnv.VITE_FIREBASE_PROJECT_ID!.trim(),
-      storageBucket: (
-        metaEnv.VITE_FIREBASE_STORAGE_BUCKET || defaultFirebaseConfig.storageBucket
-      ).trim(),
+      storageBucket: isValidFirebaseBucket(metaEnv.VITE_FIREBASE_STORAGE_BUCKET)
+        ? metaEnv.VITE_FIREBASE_STORAGE_BUCKET.trim()
+        : defaultFirebaseConfig.storageBucket,
       messagingSenderId: (
         metaEnv.VITE_FIREBASE_MESSAGING_SENDER_ID || defaultFirebaseConfig.messagingSenderId
       ).trim(),
@@ -90,6 +146,11 @@ export const db =
     ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
     : getFirestore(app);
 export const auth = getAuth(app);
+if (typeof window !== 'undefined') {
+  void setPersistence(auth, browserLocalPersistence).catch(() => {
+    // Fallback silencieux si le navigateur restreint IndexedDB/localStorage (navigation privée stricte)
+  });
+}
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
 

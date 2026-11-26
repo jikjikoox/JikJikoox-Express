@@ -21,6 +21,7 @@
     "test:security": "tsx tests/security.logic.test.ts",
     "test:supabase": "tsx tests/supabase.integration.test.ts",
     "test:features": "tsx tests/express.features.test.ts",
+    "test:auth-pwa": "tsx tests/auth.pwa.test.ts",
     "test:staging:harness": "tsx tests/staging.e2e.harness.test.ts",
     "test:emulator": "firebase emulators:exec \"node tests/firestore.rules.emulator.test.mjs\""
   },

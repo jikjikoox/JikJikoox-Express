@@ -1,15 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import {
   Bell,
+  CheckCircle2,
+  Download,
   LogOut,
   MapPin,
   Save,
   ShieldCheck,
+  Smartphone,
   Truck,
   Volume2,
 } from 'lucide-react';
 import { BrandAccentBar, BrandLogo } from '../components/BrandLogo';
 import { useCourierApp } from '../context/CourierAppContext';
+import { usePWAInstall } from '../hooks/usePWAInstall';
 import { DAKAR_ZONES, VEHICLE_LABELS } from '../lib/missionWorkflow';
 import type { VehicleType } from '../types/delivery';
 
@@ -24,6 +28,10 @@ export function ProfilePage() {
     toggleAvailability,
     logout,
   } = useCourierApp();
+
+  const { isInstalled, isIosSafari, canPromptInstall, canShowInstallAction, promptInstall } =
+    usePWAInstall();
+  const [showIosInstallHelp, setShowIosInstallHelp] = useState(false);
 
   const [firstName, setFirstName] = useState(profile?.firstName ?? '');
   const [lastName, setLastName] = useState(profile?.lastName ?? '');
@@ -329,6 +337,49 @@ export function ProfilePage() {
               </button>
             </div>
           </section>
+
+          {(isInstalled || canShowInstallAction) && (
+            <section className="bg-white border border-[#E5E2D9] rounded-2xl p-5 space-y-3">
+              <div className="flex items-center gap-2.5">
+                <Smartphone className="w-5 h-5 text-[#0E6E2D] shrink-0" aria-hidden="true" />
+                <h2 className="text-base font-bold text-[#141413]">Application mobile (PWA)</h2>
+              </div>
+
+              {isInstalled ? (
+                <div className="flex items-center gap-2 text-xs font-semibold text-[#0E6E2D] bg-[#ECF7EE] border border-[#0E6E2D]/20 rounded-xl px-3.5 py-2.5">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" aria-hidden="true" />
+                  <span>JikJikoox Express est installée sur votre appareil.</span>
+                </div>
+              ) : (
+                <>
+                  <p className="text-xs text-[#5A5851] leading-relaxed">
+                    Installez JikJikoox Express sur votre écran d’accueil pour un accès direct en plein écran.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void promptInstall().then((res) => {
+                        if (res === 'ios_manual') setShowIosInstallHelp((v) => !v);
+                      });
+                    }}
+                    className="w-full min-h-[44px] px-4 rounded-xl bg-[#0E6E2D] hover:bg-[#095220] text-white font-semibold text-sm inline-flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                  >
+                    <Download className="w-4 h-4" aria-hidden="true" />
+                    <span>
+                      {canPromptInstall ? 'Installer l’application' : 'Guide d’installation iPhone / iPad'}
+                    </span>
+                  </button>
+                  {showIosInstallHelp && isIosSafari && !canPromptInstall && (
+                    <div className="rounded-xl bg-[#F7F6F2] border border-[#E5E2D9] p-3 text-xs text-[#5A5851] leading-relaxed">
+                      Dans Safari : touchez <strong className="text-[#141413]">Partager</strong>, puis{' '}
+                      <strong className="text-[#141413]">Sur l’écran d’accueil</strong> et{' '}
+                      <strong className="text-[#141413]">Ajouter</strong>.
+                    </div>
+                  )}
+                </>
+              )}
+            </section>
+          )}
 
           <section className="bg-white border border-[#E5E2D9] rounded-2xl p-5 space-y-4">
             <div className="flex items-center justify-between gap-3 pb-3 border-b border-[#E5E2D9]">

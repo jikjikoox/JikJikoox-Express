@@ -218,6 +218,26 @@ export interface DriverNotificationsEdgeResponse {
   }>;
 }
 
+export type AdminDriverRow = DriverProfileEdgeResponse['profile'];
+
+export interface AdminDriversListEdgeResponse {
+  ok: true;
+  counts: {
+    total: number;
+    pending: number;
+    active: number;
+    suspended: number;
+    disabled: number;
+  };
+  drivers: AdminDriverRow[];
+}
+
+export interface AdminDriverUpdateEdgeResponse {
+  ok: true;
+  driver: AdminDriverRow;
+  reviewedBy: string;
+}
+
 const metaEnv = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
 
 const FUNCTIONS_BASE_URL = (

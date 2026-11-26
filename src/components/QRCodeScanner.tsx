@@ -395,7 +395,7 @@ export function QRCodeScanner({
               {mission.orderNumber} · {mission.missionId}
             </p>
             <h2 id="qr-scanner-title" className="text-base font-bold text-white truncate">
-              codPaymentMode ? "Scanner le QR de paiement COD" : "Validation rapide par QR code"
+              {codPaymentMode ? 'Scanner le QR de paiement COD' : 'Validation rapide par QR code'}
             </h2>
           </div>
 
