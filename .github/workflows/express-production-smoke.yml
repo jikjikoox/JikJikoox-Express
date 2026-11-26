@@ -1,0 +1,38 @@
+name: Express production smoke test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'scripts/smoke-express.mjs'
+      - 'package.json'
+      - 'vite.config.ts'
+      - '.github/workflows/express-production-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  production-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Wait for Hostinger deployment and verify production
+        run: |
+          for attempt in $(seq 1 12); do
+            echo "Production smoke attempt ${attempt}/12"
+            if node scripts/smoke-express.mjs; then
+              exit 0
+            fi
+            if [ "${attempt}" -lt 12 ]; then sleep 30; fi
+          done
+          echo "Express production smoke test failed after 12 attempts."
+          exit 1
