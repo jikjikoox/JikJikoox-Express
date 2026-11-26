@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import { Clock, LogOut, ShieldAlert, Truck } from 'lucide-react';
 import { BrandAccentBar, BrandLogo } from './components/BrandLogo';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { PwaInstallPrompt } from './components/PwaInstallPrompt';
 import { CourierAppProvider, useCourierApp } from './context/CourierAppContext';
 import type { AppTab } from './types/delivery';
 
@@ -259,6 +260,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       <CourierAppProvider>
+        <PwaInstallPrompt />
         <CourierExpressRouter />
       </CourierAppProvider>
     </ErrorBoundary>
