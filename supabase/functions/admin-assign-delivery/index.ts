@@ -1,8 +1,14 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+const denoRuntime = (globalThis as unknown as {
+  Deno?: {
+    env: { get(key: string): string | undefined };
+    serve(handler: (req: Request) => Promise<Response>): void;
+  };
+}).Deno;
+const getEnv = (key: string) => denoRuntime?.env.get(key) || "";
 
 const corsHeaders = (origin: string | null) => {
-  const configured = (Deno.env.get("CORS_ALLOWED_ORIGINS") || "https://admin.jikjikoox.com")
-    .split(",").map((v) => v.trim()).filter(Boolean);
+  const configured = (getEnv("CORS_ALLOWED_ORIGINS") || "https://admin.jikjikoox.com")
+    .split(",").map((v: string) => v.trim()).filter(Boolean);
   const allowedOrigin = origin && configured.includes(origin) ? origin : configured[0];
   return {
     "Access-Control-Allow-Origin": allowedOrigin,
@@ -19,14 +25,14 @@ const json = (body: unknown, status = 200, headers: Record<string,string> = {}) 
 const fail = (code: string, message: string, status: number, headers: Record<string,string>) =>
   json({ ok: false, code, message }, status, headers);
 
-Deno.serve(async (req: Request) => {
+const handleRequest = async (req: Request): Promise<Response> => {
   const headers = corsHeaders(req.headers.get("origin"));
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers });
   if (req.method !== "POST") return fail("METHOD_NOT_ALLOWED", "Méthode non autorisée.", 405, headers);
 
-  const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
-  const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  const supabaseUrl = getEnv("SUPABASE_URL") || "";
+  const anonKey = getEnv("SUPABASE_ANON_KEY") || "";
+  const serviceKey = getEnv("SUPABASE_SERVICE_ROLE_KEY") || "";
   if (!supabaseUrl || !anonKey || !serviceKey) {
     return fail("SERVER_CONFIGURATION_ERROR", "Configuration serveur incomplète.", 500, headers);
   }
@@ -121,4 +127,6 @@ Deno.serve(async (req: Request) => {
   } catch {
     return fail("INTERNAL_ERROR", "Erreur interne du service d’affectation.", 500, headers);
   }
-});
+};
+
+if (denoRuntime?.serve) denoRuntime.serve(handleRequest);
