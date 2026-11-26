@@ -32,6 +32,18 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      - name: Scan current tree (not Git history)
+        if: always()
+        run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.28.0 detect --no-git --source=/repo --redact --report-format json --report-path=/repo/gitleaks-current.json --exit-code 1
+      - name: Upload redacted current-tree report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitleaks-current-tree-report
+          path: gitleaks-current.json
+          if-no-files-found: ignore
+          retention-days: 7
+
   build-check:
     name: Build and static checks
     runs-on: ubuntu-latest
