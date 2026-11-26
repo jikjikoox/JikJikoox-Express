@@ -150,7 +150,9 @@ export function createExpressApiClient(options: ExpressApiOptions = {}) {
         const rawMsg =
           parsed && 'error' in parsed && parsed.error?.message
             ? parsed.error.message
-            : 'Erreur serveur JikJikoox.';
+            : parsed && 'error' in parsed && typeof parsed.error === 'string'
+              ? parsed.error
+              : 'Erreur serveur JikJikoox.';
 
         lastError = new ExpressApiError(
           errCode,
