@@ -110,8 +110,7 @@ function CourierExpressRouter() {
                 Compte en attente d’autorisation
               </h1>
               <p className="text-sm text-[#5A5851] leading-relaxed">
-                Votre identité Google est vérifiée, mais l’accès aux missions réelles JikJikoox doit
-                d’abord être approuvé par un administrateur.
+                Votre compte est authentifié, mais l’accès aux missions réelles JikJikoox doit d’abord être approuvé par un administrateur. Si vous venez de vous inscrire, confirmez votre adresse e-mail puis reconnectez-vous.
               </p>
             </div>
 
