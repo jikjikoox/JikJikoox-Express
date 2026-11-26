@@ -6,7 +6,7 @@ Utiliser cette checklist comme porte **Go / No-Go** avant toute action sur l’e
 
 ## 1. Isolation absolue Staging vs Production
 - [ ] Projet Firebase staging distinct (`jikjikoox-express-staging`), **jamais** `livraisonjikjikoox`.
-- [ ] Projet Supabase staging distinct (`<STAGING_PROJECT_REF>`), **jamais** le projet Supabase marketplace de production.
+- [ ] Projet Supabase staging distinct (`bwicndbbxvthbddiacks`), **jamais** le projet Supabase marketplace de production.
 - [ ] Domaines autorisés strictement staging (`staging-livraison.jikjikoox.com`).
 - [ ] `npm run validate:staging -- .env.staging` exécuté et **PASS** (0 erreur).
 - [ ] `PROD_SUPABASE_HOST="<prod-ref>.supabase.co" npm run validate:staging -- .env.staging --backend` exécuté et **PASS**.
@@ -26,7 +26,7 @@ Utiliser cette checklist comme porte **Go / No-Go** avant toute action sur l’e
 - [ ] Règles `storage.rules` déployées sur `jikjikoox-express-staging` uniquement (`allow update, delete: if false` sur `/delivery_proofs`).
 
 ## 4. Sécurité Edge Functions & Firebase Rules
-- [ ] Toutes les Edge Functions vérifient la signature cryptographique RS256 du Firebase ID Token avec `FIREBASE_PROJECT_ID=livraisonjikjikoox-staging`.
+- [ ] Toutes les Edge Functions vérifient la signature cryptographique RS256 du Firebase ID Token avec `FIREBASE_PROJECT_ID=jikjikoox-express-staging`.
 - [ ] `ALLOWED_ORIGINS` ne contient ni `*` ni aucun domaine de production.
 - [ ] `INTERNAL_SYNC_SECRET` est généré aléatoirement (32+ octets) et différent de toute future clé de production.
 - [ ] `npm run lint:rules` → **PASS** (0 erreur).
