@@ -14,7 +14,16 @@ import { DAKAR_ZONES, VEHICLE_LABELS } from '../lib/missionWorkflow';
 import type { VehicleType } from '../types/delivery';
 
 export function ProfilePage() {
-  const { mode, profile, updateProfile, toggleAvailability, logout } = useCourierApp();
+  const {
+    mode,
+    profile,
+    pushState,
+    updateProfile,
+    enablePushNotifications,
+    disablePushNotifications,
+    toggleAvailability,
+    logout,
+  } = useCourierApp();
 
   const [firstName, setFirstName] = useState(profile?.firstName ?? '');
   const [lastName, setLastName] = useState(profile?.lastName ?? '');
@@ -257,20 +266,27 @@ export function ProfilePage() {
               <div className="flex items-start gap-3">
                 <Bell className="w-4 h-4 text-[#0E6E2D] mt-1 shrink-0" aria-hidden="true" />
                 <div>
-                  <p className="text-sm font-semibold text-[#141413]">Alertes missions (Push)</p>
+                  <p className="text-sm font-semibold text-[#141413]">Alertes missions (Push FCM)</p>
                   <p className="text-xs text-[#5A5851]">
-                    Nouvelles affectations, modifications et annulations.
+                    {pushState.tokenRegistered && profile.notificationsEnabled
+                      ? 'Appareil enregistré pour les affectations, modifications et annulations.'
+                      : 'Activez pour recevoir instantanément vos missions en arrière-plan.'}
                   </p>
                 </div>
               </div>
               <button
                 type="button"
                 role="switch"
+                disabled={pushState.busy}
                 aria-checked={profile.notificationsEnabled}
-                onClick={() =>
-                  void updateProfile({ notificationsEnabled: !profile.notificationsEnabled })
-                }
-                className={`w-12 h-7 rounded-full p-1 transition-colors cursor-pointer shrink-0 ${
+                onClick={() => {
+                  if (profile.notificationsEnabled) {
+                    void disablePushNotifications();
+                  } else {
+                    void enablePushNotifications();
+                  }
+                }}
+                className={`w-12 h-7 rounded-full p-1 transition-colors cursor-pointer shrink-0 disabled:opacity-50 ${
                   profile.notificationsEnabled ? 'bg-[#0E6E2D]' : 'bg-[#D6D1C4]'
                 }`}
               >

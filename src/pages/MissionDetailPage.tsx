@@ -11,6 +11,7 @@ import {
   Lock,
   MapPin,
   MessageSquareText,
+  Navigation,
   Package,
   Phone,
   QrCode,
@@ -19,6 +20,7 @@ import {
 import { StatusIndicator } from '../components/StatusIndicator';
 import { useCourierApp } from '../context/CourierAppContext';
 import { useCourierActions } from '../hooks/useCourierActions';
+import { isMissionTrackableStatus } from '../lib/gpsTracker';
 import {
   ACTIVE_WORKFLOW_STEPS,
   ALLOWED_TRANSITIONS,
@@ -48,7 +50,7 @@ interface MissionDetailPageProps {
 }
 
 export function MissionDetailPage({ missionId, onBack }: MissionDetailPageProps) {
-  const { missions, showToast } = useCourierApp();
+  const { missions, gpsTracker, showToast } = useCourierApp();
   const { executeTransition } = useCourierActions();
   const mission = missions.find((m) => m.missionId === missionId);
 
@@ -202,6 +204,71 @@ export function MissionDetailPage({ missionId, onBack }: MissionDetailPageProps)
           </div>
         )}
       </section>
+
+      {/* Real-Time GPS Tracking Consent & Status Bar (Only during active trackable mission) */}
+      {isMissionTrackableStatus(mission.status) && (
+        <section className="bg-white border border-[#E5E2D9] rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-start gap-3 min-w-0">
+            <div
+              className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                gpsTracker.isTracking
+                  ? 'bg-[#ECF7EE] text-[#0E6E2D]'
+                  : gpsTracker.permissionState === 'denied'
+                    ? 'bg-[#FDF0EE] text-[#C6241B]'
+                    : 'bg-[#FEF6E4] text-[#8A5600]'
+              }`}
+            >
+              <Navigation className="w-5 h-5" aria-hidden="true" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-[#141413]">
+                {gpsTracker.isTracking
+                  ? 'Suivi GPS temps réel actif'
+                  : gpsTracker.permissionState === 'denied'
+                    ? 'Localisation GPS bloquée'
+                    : 'Partager ma position GPS pour cette course'}
+              </p>
+              <p className="text-xs text-[#5A5851] mt-0.5 leading-snug">
+                {gpsTracker.lastError ? (
+                  gpsTracker.lastError
+                ) : gpsTracker.isTracking && gpsTracker.lastFix ? (
+                  <span className="font-mono tabular-nums">
+                    {gpsTracker.lastFix.lat.toFixed(5)}, {gpsTracker.lastFix.lng.toFixed(5)}
+                    {gpsTracker.lastFix.accuracyMeters
+                      ? ` (±${gpsTracker.lastFix.accuracyMeters} m)`
+                      : ''}
+                    {gpsTracker.queuedCount > 0
+                      ? ` · ${gpsTracker.queuedCount} en attente réseau`
+                      : ''}
+                  </span>
+                ) : (
+                  'Actif uniquement pendant votre mission en cours. Arrêt automatique à la livraison.'
+                )}
+              </p>
+            </div>
+          </div>
+
+          <div className="shrink-0">
+            {gpsTracker.isTracking ? (
+              <button
+                type="button"
+                onClick={gpsTracker.stopTracking}
+                className="w-full sm:w-auto min-h-[40px] px-3.5 rounded-xl border border-[#D6D1C4] hover:bg-[#F7F6F2] text-xs font-semibold text-[#141413] cursor-pointer transition-colors"
+              >
+                Mettre en pause
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={gpsTracker.requestGpsPermission}
+                className="w-full sm:w-auto min-h-[40px] px-4 rounded-xl bg-[#0E6E2D] hover:bg-[#095220] text-white text-xs font-semibold cursor-pointer transition-colors"
+              >
+                Activer le GPS
+              </button>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* Financial / Encaissement Panel (Immutable from Frontend) */}
       <section

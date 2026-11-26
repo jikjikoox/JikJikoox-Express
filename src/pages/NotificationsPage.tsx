@@ -42,6 +42,9 @@ export function NotificationsPage({ onSelectMission }: NotificationsPageProps) {
     profile,
     notifications,
     unreadCount,
+    pushState,
+    enablePushNotifications,
+    disablePushNotifications,
     markNotificationRead,
     markAllNotificationsRead,
   } = useCourierApp();
@@ -62,6 +65,9 @@ export function NotificationsPage({ onSelectMission }: NotificationsPageProps) {
       onSelectMission(missionId);
     }
   };
+
+  const pushEnabledAndRegistered =
+    Boolean(profile?.notificationsEnabled) && pushState.tokenRegistered;
 
   return (
     <div className="space-y-5">
@@ -87,22 +93,58 @@ export function NotificationsPage({ onSelectMission }: NotificationsPageProps) {
         )}
       </div>
 
-      {/* FCM Channel Notice */}
-      <section className="bg-white border border-[#E5E2D9] rounded-2xl p-4 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-10 h-10 rounded-xl bg-[#ECF7EE] text-[#0E6E2D] flex items-center justify-center shrink-0">
+      {/* FCM Channel Notice & Explicit Activation Control */}
+      <section className="bg-white border border-[#E5E2D9] rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-start gap-3 min-w-0">
+          <div
+            className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+              pushEnabledAndRegistered
+                ? 'bg-[#ECF7EE] text-[#0E6E2D]'
+                : pushState.supportState === 'permission_denied'
+                  ? 'bg-[#FDF0EE] text-[#C6241B]'
+                  : 'bg-[#FEF6E4] text-[#8A5600]'
+            }`}
+          >
             <BellRing className="w-5 h-5" aria-hidden="true" />
           </div>
           <div className="min-w-0">
             <p className="text-sm font-bold text-[#141413]">
               Alertes temps réel (Firebase Cloud Messaging)
             </p>
-            <p className="text-xs text-[#5A5851]">
-              {profile?.notificationsEnabled
-                ? 'Notifications activées pour les affectations, instructions et confirmations.'
-                : 'Notifications désactivées dans votre profil livreur.'}
+            <p className="text-xs text-[#5A5851] mt-0.5 leading-snug">
+              {pushState.statusMessage
+                ? pushState.statusMessage
+                : pushEnabledAndRegistered
+                  ? 'Notifications push actives sur cet appareil pour les affectations, modifications et confirmations.'
+                  : pushState.supportState === 'permission_denied'
+                    ? 'Notifications bloquées dans le navigateur. Autorisez ce site dans vos paramètres pour recevoir les alertes push.'
+                    : pushState.supportState === 'unsupported'
+                      ? 'Push navigateur non supporté sur cet appareil : les notifications in-app restent actives.'
+                      : 'Activez les notifications push pour recevoir instantanément chaque nouvelle mission même en arrière-plan.'}
             </p>
           </div>
+        </div>
+
+        <div className="shrink-0">
+          {pushEnabledAndRegistered ? (
+            <button
+              type="button"
+              disabled={pushState.busy}
+              onClick={() => void disablePushNotifications()}
+              className="w-full sm:w-auto min-h-[42px] px-4 rounded-xl border border-[#D6D1C4] hover:bg-[#F7F6F2] text-xs font-semibold text-[#141413] cursor-pointer disabled:opacity-50 transition-colors"
+            >
+              {pushState.busy ? 'Mise à jour…' : 'Désactiver le push'}
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={pushState.busy || pushState.supportState === 'unsupported'}
+              onClick={() => void enablePushNotifications()}
+              className="w-full sm:w-auto min-h-[42px] px-4 rounded-xl bg-[#0E6E2D] hover:bg-[#095220] text-white text-xs font-semibold cursor-pointer disabled:opacity-50 transition-colors"
+            >
+              {pushState.busy ? 'Activation…' : 'Activer les alertes push'}
+            </button>
+          )}
         </div>
       </section>
 

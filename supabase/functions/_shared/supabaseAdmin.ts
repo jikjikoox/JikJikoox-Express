@@ -155,3 +155,35 @@ export async function fetchDriverByFirebaseUid(
   }
   return res.data[0];
 }
+
+export interface AdminRecord {
+  firebase_uid: string;
+  email: string;
+  display_name: string | null;
+  is_active: boolean;
+}
+
+export async function fetchActiveAdminByFirebaseUid(
+  env: SupabaseServerEnv,
+  firebaseUid: string
+): Promise<AdminRecord | null> {
+  const res = await supabaseRest<AdminRecord[]>(
+    env,
+    `/rest/v1/express_admins?firebase_uid=eq.${encodeURIComponent(firebaseUid)}&is_active=eq.true&limit=1`
+  );
+  if (!res.ok || !Array.isArray(res.data) || res.data.length === 0) {
+    return null;
+  }
+  return res.data[0];
+}
+
+export function assertAuthorizedAdmin(admin: AdminRecord | null): AdminRecord {
+  if (!admin || !admin.is_active) {
+    throw new DriverAuthorizationError(
+      'ADMIN_REQUIRED',
+      'Accès réservé aux administrateurs JikJikoox Express.',
+      403
+    );
+  }
+  return admin;
+}

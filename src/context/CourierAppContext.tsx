@@ -27,6 +27,13 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { auth, db, googleProvider, testFirestoreConnection } from '../lib/firebase';
+import {
+  detectPushSupportState,
+  playPriorityNotificationChime,
+  registerFcmPushToken,
+  subscribeForegroundFcmMessages,
+  unregisterFcmPushToken,
+} from '../lib/fcmPush';
 import { handleFirestoreError, OperationType } from '../lib/firestoreErrors';
 import { isTransitionAllowed, MISSION_STATUS_META } from '../lib/missionWorkflow';
 import {
@@ -35,6 +42,10 @@ import {
   mapEdgeDriverToProfile,
   mapEdgeNotificationToClient,
 } from '../lib/supabaseContract';
+import {
+  type CourierGpsTrackerState,
+  useCourierGpsTracker,
+} from '../hooks/useCourierGpsTracker';
 import { expressApi, ExpressApiError } from '../services/expressApi';
 import { DEFAULT_COURIER_AVATAR } from '../lib/mediaAssets';
 import type {
@@ -45,6 +56,7 @@ import type {
   MissionEvent,
   MissionStatus,
   ProofSubmission,
+  PushSupportState,
   VehicleType,
 } from '../types/delivery';
 
@@ -68,6 +80,19 @@ export interface ProfileUpdateInput {
   pushSoundEnabled?: boolean;
 }
 
+export interface PushNotificationState {
+  supportState: PushSupportState;
+  busy: boolean;
+  tokenRegistered: boolean;
+  statusMessage: string | null;
+}
+
+export interface ProofPhotoUploadResult {
+  proofId: string;
+  storagePath: string;
+  uploadVerified: boolean;
+}
+
 interface CourierAppContextValue {
   mode: SessionMode;
   backendConnected: boolean;
@@ -81,6 +106,8 @@ interface CourierAppContextValue {
   unreadCount: number;
   authError: string | null;
   toast: ToastMessage | null;
+  gpsTracker: CourierGpsTrackerState;
+  pushState: PushNotificationState;
   dismissToast: () => void;
   showToast: (text: string, tone?: 'green' | 'yellow' | 'red') => void;
   signInWithGoogle: () => Promise<void>;
@@ -90,6 +117,17 @@ interface CourierAppContextValue {
   refreshBackendData: () => Promise<void>;
   toggleAvailability: () => Promise<void>;
   updateProfile: (updates: ProfileUpdateInput) => Promise<void>;
+  enablePushNotifications: () => Promise<boolean>;
+  disablePushNotifications: () => Promise<void>;
+  uploadDeliveryProofPhoto: (params: {
+    deliveryId: string;
+    file: File;
+    recipientName: string;
+    proofCode?: string;
+    proofNote?: string;
+    codCollectedConfirmed: boolean;
+    onStageChange?: (stage: 'preparing' | 'uploading' | 'confirming') => void;
+  }) => Promise<ProofPhotoUploadResult>;
   transitionMission: (
     missionId: string,
     nextStatus: MissionStatus,
@@ -229,7 +267,14 @@ export function CourierAppProvider({ children }: { children: React.ReactNode }) 
     if (backendConnected) {
       void (async () => {
         try {
-          await refreshBackendData();
+          const adminCheck = getDoc(doc(db, 'admins', uid))
+            .then((snap) => {
+              if (active) setIsAdminUser(snap.exists() && snap.data()?.active === true);
+            })
+            .catch(() => {
+              if (active) setIsAdminUser(false);
+            });
+          await Promise.all([refreshBackendData(), adminCheck]);
         } finally {
           if (active) setLoadingData(false);
         }
@@ -482,7 +527,270 @@ export function CourierAppProvider({ children }: { children: React.ReactNode }) 
     setMode(firebaseUser ? 'firebase' : 'unauthenticated');
   }, [firebaseUser]);
 
+  const gpsTrackingEnabled =
+    mode === 'demo' || (mode === 'firebase' && Boolean(firebaseUser) && profile?.accountStatus === 'active');
+
+  const gpsTracker = useCourierGpsTracker({
+    enabled: gpsTrackingEnabled,
+    mode,
+    backendConnected,
+    firebaseUser,
+    missions,
+    onNotify: showToast,
+  });
+
+  const [pushSupportState, setPushSupportState] = useState<PushSupportState>(() =>
+    detectPushSupportState()
+  );
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushStatusMessage, setPushStatusMessage] = useState<string | null>(null);
+
+  // Écoute des notifications FCM en premier plan (foreground)
+  useEffect(() => {
+    if (
+      mode !== 'firebase' ||
+      !firebaseUser ||
+      profile?.accountStatus !== 'active' ||
+      profile?.notificationsEnabled === false
+    ) {
+      return;
+    }
+
+    let unsubscribe: (() => void) | null = null;
+    let active = true;
+
+    void subscribeForegroundFcmMessages((payload) => {
+      if (!active) return;
+      showToast(`${payload.title} — ${payload.body}`, 'green');
+      if (profile.pushSoundEnabled) {
+        playPriorityNotificationChime();
+      }
+      if (backendConnected) {
+        void refreshBackendData();
+      }
+    }).then((unsub) => {
+      if (!active) {
+        unsub?.();
+        return;
+      }
+      unsubscribe = unsub;
+    });
+
+    return () => {
+      active = false;
+      unsubscribe?.();
+    };
+  }, [
+    mode,
+    firebaseUser,
+    profile?.accountStatus,
+    profile?.notificationsEnabled,
+    profile?.pushSoundEnabled,
+    backendConnected,
+    refreshBackendData,
+    showToast,
+  ]);
+
+  const enablePushNotifications = useCallback(async (): Promise<boolean> => {
+    setPushBusy(true);
+    setPushStatusMessage(null);
+    try {
+      if (mode === 'demo') {
+        setProfile((prev) =>
+          prev
+            ? {
+                ...prev,
+                notificationsEnabled: true,
+                fcmTokenStatus: 'registered',
+                updatedAtIso: new Date().toISOString(),
+              }
+            : null
+        );
+        setPushSupportState('ready');
+        setPushStatusMessage('Alertes push simulées en mode démonstration local.');
+        showToast('Alertes missions activées (mode démonstration).', 'green');
+        return true;
+      }
+
+      if (mode !== 'firebase' || !firebaseUser || profile?.accountStatus !== 'active') {
+        showToast('Activation réservée aux livreurs actifs connectés.', 'red');
+        return false;
+      }
+
+      const reg = await registerFcmPushToken();
+      setPushSupportState(reg.state);
+      setPushStatusMessage(reg.message);
+
+      if (!reg.ok || !reg.token) {
+        showToast(reg.message, reg.state === 'permission_denied' ? 'red' : 'yellow');
+        return false;
+      }
+
+      if (backendConnected) {
+        const idToken = await firebaseUser.getIdToken();
+        const res = await expressApi.updateDriverProfile(idToken, {
+          notificationsEnabled: true,
+          fcmToken: reg.token,
+        });
+        setProfile(mapEdgeDriverToProfile(res.profile));
+      } else {
+        await updateDoc(doc(db, 'couriers', firebaseUser.uid), {
+          notificationsEnabled: true,
+          fcmTokenStatus: 'registered',
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      showToast('Notifications push FCM activées sur cet appareil.', 'green');
+      return true;
+    } catch (err) {
+      const msg =
+        err instanceof ExpressApiError
+          ? err.message
+          : 'Impossible d’enregistrer les notifications push.';
+      setPushStatusMessage(msg);
+      showToast(msg, 'red');
+      return false;
+    } finally {
+      setPushBusy(false);
+    }
+  }, [mode, firebaseUser, profile?.accountStatus, backendConnected, showToast]);
+
+  const disablePushNotifications = useCallback(async () => {
+    setPushBusy(true);
+    try {
+      if (mode === 'demo') {
+        setProfile((prev) =>
+          prev
+            ? {
+                ...prev,
+                notificationsEnabled: false,
+                fcmTokenStatus: 'unregistered',
+                updatedAtIso: new Date().toISOString(),
+              }
+            : null
+        );
+        setPushStatusMessage('Notifications push désactivées (mode démo).');
+        showToast('Notifications push désactivées.', 'yellow');
+        return;
+      }
+
+      await unregisterFcmPushToken();
+      if (mode === 'firebase' && firebaseUser && profile?.accountStatus === 'active') {
+        if (backendConnected) {
+          const idToken = await firebaseUser.getIdToken();
+          const res = await expressApi.updateDriverProfile(idToken, {
+            notificationsEnabled: false,
+            fcmToken: null,
+          });
+          setProfile(mapEdgeDriverToProfile(res.profile));
+        } else {
+          await updateDoc(doc(db, 'couriers', firebaseUser.uid), {
+            notificationsEnabled: false,
+            fcmTokenStatus: 'unregistered',
+            updatedAt: serverTimestamp(),
+          });
+        }
+      }
+      setPushSupportState(detectPushSupportState());
+      setPushStatusMessage('Notifications push désactivées sur cet appareil.');
+      showToast('Notifications push désactivées.', 'yellow');
+    } catch (err) {
+      showToast(
+        err instanceof ExpressApiError
+          ? err.message
+          : 'Erreur lors de la désactivation des notifications.',
+        'red'
+      );
+    } finally {
+      setPushBusy(false);
+    }
+  }, [mode, firebaseUser, profile?.accountStatus, backendConnected, showToast]);
+
+  const uploadDeliveryProofPhoto = useCallback(
+    async (params: {
+      deliveryId: string;
+      file: File;
+      recipientName: string;
+      proofCode?: string;
+      proofNote?: string;
+      codCollectedConfirmed: boolean;
+      onStageChange?: (stage: 'preparing' | 'uploading' | 'confirming') => void;
+    }): Promise<ProofPhotoUploadResult> => {
+      const allowedMimes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+      if (!allowedMimes.has(params.file.type)) {
+        throw new Error('Format non supporté. Utilisez uniquement une image JPEG, PNG ou WebP.');
+      }
+      if (params.file.size <= 0 || params.file.size > 5 * 1024 * 1024) {
+        throw new Error('La photo de preuve doit faire au maximum 5 Mo.');
+      }
+
+      if (mode === 'demo') {
+        params.onStageChange?.('preparing');
+        params.onStageChange?.('uploading');
+        params.onStageChange?.('confirming');
+        return {
+          proofId: `demo_proof_${Date.now()}`,
+          storagePath: `demo/${params.deliveryId}/${params.file.name}`,
+          uploadVerified: true,
+        };
+      }
+
+      if (mode !== 'firebase' || !firebaseUser || profile?.accountStatus !== 'active') {
+        throw new Error('Authentification livreur actif requise pour transmettre la photo.');
+      }
+      if (!backendConnected) {
+        throw new Error(
+          'Backend Supabase non configuré : impossible de téléverser la photo de preuve.'
+        );
+      }
+
+      const idToken = await firebaseUser.getIdToken();
+      const mimeType = params.file.type as 'image/jpeg' | 'image/png' | 'image/webp';
+
+      // Étape 1 : Demander une URL signée courte durée (aucune ligne en base tant que non uploadé)
+      params.onStageChange?.('preparing');
+      const prepared = await expressApi.prepareDeliveryProofUpload(idToken, {
+        deliveryId: params.deliveryId,
+        recipientName: params.recipientName,
+        proofCode: params.proofCode,
+        proofNote: params.proofNote,
+        codCollectedConfirmed: params.codCollectedConfirmed,
+        mimeType,
+        fileSizeBytes: params.file.size,
+      });
+
+      // Étape 2 : Envoi binaire direct vers Supabase Private Storage via l'URL signée
+      params.onStageChange?.('uploading');
+      await expressApi.uploadPhotoToSignedUrl(prepared.signedUploadUrl, params.file, mimeType);
+
+      // Étape 3 : Confirmation serveur (HEAD Storage + INSERT immuable vérifié)
+      params.onStageChange?.('confirming');
+      const confirmed = await expressApi.confirmDeliveryProof(idToken, {
+        deliveryId: params.deliveryId,
+        proofId: prepared.proofId,
+        storagePath: prepared.storagePath,
+        recipientName: params.recipientName,
+        proofCode: params.proofCode,
+        proofNote: params.proofNote,
+        codCollectedConfirmed: params.codCollectedConfirmed,
+        mimeType,
+        fileSizeBytes: params.file.size,
+        gpsLat: gpsTracker.lastFix?.lat,
+        gpsLng: gpsTracker.lastFix?.lng,
+      });
+
+      return {
+        proofId: confirmed.proofId,
+        storagePath: confirmed.storagePath ?? prepared.storagePath,
+        uploadVerified: confirmed.uploadVerified,
+      };
+    },
+    [mode, firebaseUser, profile?.accountStatus, backendConnected, gpsTracker.lastFix]
+  );
+
   const logout = useCallback(async () => {
+    gpsTracker.stopTracking();
     if (firebaseUser) {
       await signOut(auth);
     }
@@ -492,7 +800,7 @@ export function CourierAppProvider({ children }: { children: React.ReactNode }) 
     setMissions([]);
     setNotifications([]);
     showToast('Session clôturée en toute sécurité.', 'green');
-  }, [firebaseUser, showToast]);
+  }, [firebaseUser, gpsTracker, showToast]);
 
   const updateProfile = useCallback(
     async (updates: ProfileUpdateInput) => {
@@ -827,6 +1135,16 @@ export function CourierAppProvider({ children }: { children: React.ReactNode }) 
     [notifications]
   );
 
+  const pushState = useMemo<PushNotificationState>(
+    () => ({
+      supportState: pushSupportState,
+      busy: pushBusy,
+      tokenRegistered: profile?.fcmTokenStatus === 'registered',
+      statusMessage: pushStatusMessage,
+    }),
+    [pushSupportState, pushBusy, profile?.fcmTokenStatus, pushStatusMessage]
+  );
+
   const value = useMemo<CourierAppContextValue>(
     () => ({
       mode,
@@ -841,6 +1159,8 @@ export function CourierAppProvider({ children }: { children: React.ReactNode }) 
       unreadCount,
       authError,
       toast,
+      gpsTracker,
+      pushState,
       dismissToast,
       showToast,
       signInWithGoogle,
@@ -850,6 +1170,9 @@ export function CourierAppProvider({ children }: { children: React.ReactNode }) 
       refreshBackendData,
       toggleAvailability,
       updateProfile,
+      enablePushNotifications,
+      disablePushNotifications,
+      uploadDeliveryProofPhoto,
       transitionMission,
       markNotificationRead,
       markAllNotificationsRead,
@@ -867,6 +1190,8 @@ export function CourierAppProvider({ children }: { children: React.ReactNode }) 
       unreadCount,
       authError,
       toast,
+      gpsTracker,
+      pushState,
       dismissToast,
       showToast,
       signInWithGoogle,
@@ -876,6 +1201,9 @@ export function CourierAppProvider({ children }: { children: React.ReactNode }) 
       refreshBackendData,
       toggleAvailability,
       updateProfile,
+      enablePushNotifications,
+      disablePushNotifications,
+      uploadDeliveryProofPhoto,
       transitionMission,
       markNotificationRead,
       markAllNotificationsRead,

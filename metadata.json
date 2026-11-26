@@ -1,6 +1,6 @@
 {
   "name": "JikJikoox Express",
   "description": "Application mobile-first des livreurs de la marketplace sénégalaise JikJikoox — gestion des missions, statuts contrôlés, encaissements et preuves de livraison à Dakar.",
-  "requestFramePermissions": ["camera"],
+  "requestFramePermissions": ["camera", "geolocation"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

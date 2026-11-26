@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Clock, LogOut, ShieldAlert, Truck } from 'lucide-react';
 import { BrandAccentBar, BrandLogo } from './components/BrandLogo';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -12,6 +12,9 @@ const LoginPage = lazy(() =>
   import('./pages/LoginPage').then((m) => ({ default: m.LoginPage }))
 );
 
+const AdminFleetMapPage = lazy(() =>
+  import('./pages/AdminFleetMapPage').then((m) => ({ default: m.AdminFleetMapPage }))
+);
 const DashboardPage = lazy(() =>
   import('./pages/DashboardPage').then((m) => ({ default: m.DashboardPage }))
 );
@@ -34,6 +37,7 @@ const ProfilePage = lazy(() =>
 const TAB_TITLES: Record<AppTab, string> = {
   dashboard: 'JikJikoox Express',
   missions: 'Mes missions',
+  fleet: 'Suivi GPS Flotte',
   history: 'Historique',
   notifications: 'Notifications',
   profile: 'Mon profil',
@@ -50,6 +54,16 @@ function CourierExpressRouter() {
   } = useCourierApp();
   const [activeTab, setActiveTab] = useState<AppTab>('dashboard');
   const [selectedMissionId, setSelectedMissionId] = useState<string | null>(null);
+
+  // Ouverture directe d'une mission lors du clic sur une notification push FCM (`/?mission=...`)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const missionParam = params.get('mission')?.trim();
+    if (missionParam) {
+      setSelectedMissionId(missionParam);
+    }
+  }, []);
 
   if (!authReady || (mode === 'firebase' && loadingData && !profile)) {
     return (
@@ -226,6 +240,8 @@ function CourierExpressRouter() {
             />
           ) : activeTab === 'missions' ? (
             <MissionsPage onSelectMission={handleSelectMission} />
+          ) : activeTab === 'fleet' ? (
+            <AdminFleetMapPage />
           ) : activeTab === 'history' ? (
             <HistoryPage onSelectMission={handleSelectMission} />
           ) : activeTab === 'notifications' ? (

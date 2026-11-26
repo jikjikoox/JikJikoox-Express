@@ -175,6 +175,16 @@ export async function handleDeliveryActionRequest(req: Request): Promise<Respons
     const nextStatus = raw.nextStatus as BackendDeliveryStatus;
 
     // 3. Transaction atomique PostgreSQL avec verrou FOR UPDATE + idempotence
+    const proofId =
+      typeof proof?.proofId === 'string' &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(proof.proofId.trim())
+        ? proof.proofId.trim()
+        : null;
+    const proofGpsLat =
+      typeof proof?.gpsLat === 'number' && Number.isFinite(proof.gpsLat) ? proof.gpsLat : null;
+    const proofGpsLng =
+      typeof proof?.gpsLng === 'number' && Number.isFinite(proof.gpsLng) ? proof.gpsLng : null;
+
     const rpcRes = await supabaseRest<{
       idempotent_replay: boolean;
       event_id: string;
@@ -195,6 +205,9 @@ export async function handleDeliveryActionRequest(req: Request): Promise<Respons
         p_proof_note: typeof proof?.proofNote === 'string' ? proof.proofNote : null,
         p_failure_reason: typeof raw.failureReason === 'string' ? raw.failureReason : null,
         p_cod_confirmed: proof?.codCollectedConfirmed === true,
+        p_proof_id: proofId,
+        p_gps_lat: proofGpsLat,
+        p_gps_lng: proofGpsLng,
       }),
     });
 
@@ -275,7 +288,12 @@ export async function handleDeliveryActionRequest(req: Request): Promise<Respons
 
     // Notification de confirmation FCM lors d'une livraison clôturée
     let notificationSynced = true;
-    if (rpcRes.data.status === 'DELIVERED' && !rpcRes.data.idempotent_replay) {
+    if (
+      rpcRes.data.status === 'DELIVERED' &&
+      !rpcRes.data.idempotent_replay &&
+      driver.notifications_enabled !== false
+    ) {
+      const confirmationDedupeKey = `confirmation:${delivery.id}:v${rpcRes.data.sync_version}`;
       const fcmRes = await dispatchFcmNotificationSafe(
         {
           fcmToken: driver.fcm_token,
@@ -283,10 +301,29 @@ export async function handleDeliveryActionRequest(req: Request): Promise<Respons
           body: `Preuve enregistrée pour ${delivery.delivery_zone}.`,
           missionId: delivery.id,
           syncVersion: rpcRes.data.sync_version,
+          category: 'confirmation',
+          dedupeKey: confirmationDedupeKey,
         },
         saConfig
       );
       notificationSynced = fcmRes.synced;
+
+      // Nettoyage automatique si le jeton FCM a expiré ou été révoqué par le navigateur
+      if (fcmRes.tokenInvalid) {
+        const nowIso = new Date().toISOString();
+        await supabaseRest(
+          env,
+          `/rest/v1/express_drivers?id=eq.${encodeURIComponent(driver.id)}`,
+          {
+            method: 'PATCH',
+            body: JSON.stringify({
+              fcm_token: null,
+              fcm_token_invalidated_at: nowIso,
+              updated_at: nowIso,
+            }),
+          }
+        );
+      }
     }
 
     return jsonResponse(

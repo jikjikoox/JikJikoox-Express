@@ -1,8 +1,18 @@
 /**
  * Supabase Edge Function : delivery-proof
- * - POST : Valide l'attribution de la mission (`ARRIVED`), le type MIME et la taille (<= 5 Mo),
- *          puis génère une URL d'upload signée courte durée (120s) dans le bucket privé
- *          `delivery-proofs` et enregistre les métadonnées immuables.
+ * Flux sécurisé en 2 phases (sans jamais exposer la Service Role Key au frontend) :
+ *
+ * 1. `action: "prepare-upload"` :
+ *    - Vérifie le jeton Firebase ID + statut `active` du livreur + propriété de la mission (`ARRIVED`).
+ *    - Valide le nom du réceptionnaire, le type MIME (JPEG/PNG/WebP) et la taille (<= 5 Mo).
+ *    - Génère une URL d'upload signée courte durée (120s) vers le bucket privé `delivery-proofs`
+ *      avec confinement strict `{firebaseUid}/{deliveryId}/{proofUuid}.{ext}`.
+ *    - N'insère PAS encore de ligne dans `express_delivery_proofs` tant que l'upload n'est pas vérifié.
+ *
+ * 2. `action: "confirm-proof"` :
+ *    - Vérifie que le chemin Storage est strictement confiné à ce livreur et cette mission.
+ *    - Vérifie auprès de Supabase Storage (HEAD) que le fichier photo existe réellement dans le bucket privé.
+ *    - Insère ensuite l'unique enregistrement immuable dans `express_delivery_proofs` avec `upload_verified = true`.
  */
 
 import { buildCorsHeaders, errorResponse, jsonResponse } from '../_shared/corsAndResponse.ts';
@@ -16,6 +26,7 @@ import {
   DriverAuthorizationError,
   fetchDriverByFirebaseUid,
   readDenoEnv,
+  type SupabaseServerEnv,
   supabaseRest,
 } from '../_shared/supabaseAdmin.ts';
 
@@ -32,6 +43,42 @@ export function isSignedUrlExpired(expiresAtIso: string, nowMs = Date.now()): bo
   const expiresMs = Date.parse(expiresAtIso);
   if (Number.isNaN(expiresMs)) return true;
   return nowMs >= expiresMs;
+}
+
+export function sanitizePathSegment(value: string): string {
+  return value.replace(/[^a-zA-Z0-9_-]/g, '');
+}
+
+export function isConfinedStoragePath(
+  storagePath: string,
+  firebaseUid: string,
+  deliveryId: string
+): boolean {
+  if (!storagePath || typeof storagePath !== 'string') return false;
+  if (
+    storagePath.includes('..') ||
+    storagePath.includes('\\') ||
+    storagePath.toLowerCase().includes('%2e') ||
+    storagePath.startsWith('/')
+  ) {
+    return false;
+  }
+  const safeUid = sanitizePathSegment(firebaseUid);
+  const safeDelivery = sanitizePathSegment(deliveryId);
+  if (!safeUid || !safeDelivery) return false;
+
+  const expectedPrefix = `${safeUid}/${safeDelivery}/`;
+  if (!storagePath.startsWith(expectedPrefix)) return false;
+
+  const filePart = storagePath.slice(expectedPrefix.length);
+  return /^[a-zA-Z0-9_-]+\.(jpg|png|webp)$/.test(filePart);
+}
+
+function encodeStoragePath(storagePath: string): string {
+  return storagePath
+    .split('/')
+    .map((segment) => encodeURIComponent(segment))
+    .join('/');
 }
 
 export function validateProofUploadMetadata(input: {
@@ -72,6 +119,39 @@ export function validateProofUploadMetadata(input: {
   return { ok: true };
 }
 
+async function verifyStorageObjectExists(
+  env: SupabaseServerEnv,
+  storagePath: string
+): Promise<{ exists: boolean; contentLength?: number }> {
+  try {
+    const res = await fetch(
+      `${env.supabaseUrl}/storage/v1/object/delivery-proofs/${encodeStoragePath(storagePath)}`,
+      {
+        method: 'HEAD',
+        headers: {
+          apikey: env.serviceRoleKey,
+          Authorization: `Bearer ${env.serviceRoleKey}`,
+        },
+      }
+    );
+    if (!res.ok) {
+      return { exists: false };
+    }
+    const lenHeader = res.headers.get('content-length');
+    const contentLength = lenHeader ? Number(lenHeader) : undefined;
+    if (typeof contentLength === 'number' && !Number.isNaN(contentLength) && contentLength === 0) {
+      return { exists: false, contentLength: 0 };
+    }
+    return { exists: true, contentLength };
+  } catch {
+    return { exists: false };
+  }
+}
+
+function isValidCoord(val: unknown, min: number, max: number): val is number {
+  return typeof val === 'number' && Number.isFinite(val) && val >= min && val <= max;
+}
+
 export async function handleDeliveryProofRequest(req: Request): Promise<Response> {
   const env = readDenoEnv();
   const cors = buildCorsHeaders(req.headers.get('origin'), env.allowedOrigins);
@@ -99,6 +179,15 @@ export async function handleDeliveryProofRequest(req: Request): Promise<Response
     if (!deliveryId) {
       return errorResponse('MISSION_ID_REQUIRED', 'Identifiant de mission requis.', 400, cors);
     }
+
+    const action =
+      raw.action === 'confirm-proof'
+        ? 'confirm-proof'
+        : raw.action === 'prepare-upload'
+          ? 'prepare-upload'
+          : typeof raw.mimeType === 'string'
+            ? 'prepare-upload'
+            : 'confirm-proof';
 
     const metaCheck = validateProofUploadMetadata({
       mimeType: typeof raw.mimeType === 'string' ? raw.mimeType : undefined,
@@ -140,20 +229,27 @@ export async function handleDeliveryProofRequest(req: Request): Promise<Response
       );
     }
 
-    const proofUuid = crypto.randomUUID();
-    let storagePath: string | null = null;
-    let signedUploadUrl: string | null = null;
-    let expiresAtIso: string | null = null;
+    // -------------------------------------------------------------------------
+    // PHASE 1 : Préparer l'URL d'upload signée (aucune écriture en base avant confirmation)
+    // -------------------------------------------------------------------------
+    if (action === 'prepare-upload') {
+      if (!metaCheck.ext) {
+        return errorResponse(
+          'MIME_TYPE_REQUIRED',
+          'Le type MIME de la photo (JPEG, PNG ou WebP) est requis pour préparer l’envoi.',
+          400,
+          cors
+        );
+      }
 
-    if (metaCheck.ext) {
-      // Confinement strict du chemin Storage par livreur et mission
-      const safeUid = verified.uid.replace(/[^a-zA-Z0-9_-]/g, '');
-      const safeDelivery = delivery.id.replace(/[^a-zA-Z0-9_-]/g, '');
-      storagePath = `${safeUid}/${safeDelivery}/${proofUuid}.${metaCheck.ext}`;
+      const proofUuid = crypto.randomUUID();
+      const safeUid = sanitizePathSegment(verified.uid);
+      const safeDelivery = sanitizePathSegment(delivery.id);
+      const storagePath = `${safeUid}/${safeDelivery}/${proofUuid}.${metaCheck.ext}`;
 
       const signRes = await supabaseRest<{ url?: string; token?: string }>(
         env,
-        `/storage/v1/object/upload/sign/delivery-proofs/${encodeURIComponent(storagePath)}`,
+        `/storage/v1/object/upload/sign/delivery-proofs/${encodeStoragePath(storagePath)}`,
         {
           method: 'POST',
           body: JSON.stringify({ expiresIn: SIGNED_UPLOAD_TTL_SECONDS }),
@@ -161,11 +257,76 @@ export async function handleDeliveryProofRequest(req: Request): Promise<Response
       );
 
       if (!signRes.ok || !signRes.data?.url) {
-        return errorResponse('SIGNED_URL_FAILED', 'Impossible de préparer l’envoi sécurisé de la photo.', 502, cors);
+        return errorResponse(
+          'SIGNED_URL_FAILED',
+          'Impossible de préparer l’envoi sécurisé de la photo.',
+          502,
+          cors
+        );
       }
-      signedUploadUrl = `${env.supabaseUrl}/storage/v1${signRes.data.url}`;
-      expiresAtIso = new Date(Date.now() + SIGNED_UPLOAD_TTL_SECONDS * 1000).toISOString();
+
+      const signedUploadUrl = signRes.data.url.startsWith('http')
+        ? signRes.data.url
+        : `${env.supabaseUrl}/storage/v1${signRes.data.url}`;
+      const expiresAtIso = new Date(Date.now() + SIGNED_UPLOAD_TTL_SECONDS * 1000).toISOString();
+
+      return jsonResponse(
+        {
+          ok: true,
+          phase: 'upload_prepared',
+          proofId: proofUuid,
+          storagePath,
+          signedUploadUrl,
+          expiresAtIso,
+        },
+        200,
+        cors
+      );
     }
+
+    // -------------------------------------------------------------------------
+    // PHASE 2 : Vérification réelle dans Storage + enregistrement immuable en base
+    // -------------------------------------------------------------------------
+    const requestedProofId =
+      typeof raw.proofId === 'string' &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw.proofId.trim())
+        ? raw.proofId.trim()
+        : crypto.randomUUID();
+
+    const storagePath =
+      typeof raw.storagePath === 'string' && raw.storagePath.trim()
+        ? raw.storagePath.trim()
+        : null;
+
+    let uploadVerified = false;
+    let uploadVerifiedAt: string | null = null;
+
+    if (storagePath) {
+      if (!isConfinedStoragePath(storagePath, verified.uid, delivery.id)) {
+        return errorResponse(
+          'INVALID_STORAGE_PATH',
+          'Chemin de stockage photo refusé : hors périmètre livreur/mission.',
+          403,
+          cors
+        );
+      }
+
+      const storageCheck = await verifyStorageObjectExists(env, storagePath);
+      if (!storageCheck.exists) {
+        return errorResponse(
+          'STORAGE_UPLOAD_NOT_VERIFIED',
+          'La photo n’a pas encore été reçue dans le stockage sécurisé. Veuillez relancer l’envoi.',
+          409,
+          cors
+        );
+      }
+
+      uploadVerified = true;
+      uploadVerifiedAt = new Date().toISOString();
+    }
+
+    const gpsLat = isValidCoord(raw.gpsLat, -90, 90) ? raw.gpsLat : null;
+    const gpsLng = isValidCoord(raw.gpsLng, -180, 180) ? raw.gpsLng : null;
 
     const inserted = await supabaseRest<Array<{ id: string; created_at: string }>>(
       env,
@@ -174,7 +335,7 @@ export async function handleDeliveryProofRequest(req: Request): Promise<Response
         method: 'POST',
         headers: { Prefer: 'return=representation' },
         body: JSON.stringify({
-          id: proofUuid,
+          id: requestedProofId,
           delivery_id: delivery.id,
           order_id: delivery.order_id,
           driver_id: driver.id,
@@ -187,6 +348,10 @@ export async function handleDeliveryProofRequest(req: Request): Promise<Response
           mime_type: typeof raw.mimeType === 'string' ? raw.mimeType : null,
           file_size_bytes: typeof raw.fileSizeBytes === 'number' ? raw.fileSizeBytes : null,
           cod_collected_confirmed: raw.codCollectedConfirmed === true,
+          upload_verified: uploadVerified,
+          upload_verified_at: uploadVerifiedAt,
+          gps_lat: gpsLat,
+          gps_lng: gpsLng,
         }),
       }
     );
@@ -198,10 +363,10 @@ export async function handleDeliveryProofRequest(req: Request): Promise<Response
     return jsonResponse(
       {
         ok: true,
+        phase: 'confirmed',
         proofId: inserted.data[0].id,
         storagePath,
-        signedUploadUrl,
-        expiresAtIso,
+        uploadVerified,
         createdAt: inserted.data[0].created_at,
       },
       201,
@@ -215,7 +380,9 @@ export async function handleDeliveryProofRequest(req: Request): Promise<Response
   }
 }
 
-const denoRuntime = (globalThis as unknown as { Deno?: { serve(fn: (r: Request) => Promise<Response>): void } }).Deno;
+const denoRuntime = (
+  globalThis as unknown as { Deno?: { serve(fn: (r: Request) => Promise<Response>): void } }
+).Deno;
 if (denoRuntime?.serve) {
   denoRuntime.serve(handleDeliveryProofRequest);
 }

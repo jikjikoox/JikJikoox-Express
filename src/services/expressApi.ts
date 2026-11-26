@@ -1,9 +1,14 @@
 import {
+  type AdminFleetLocationsEdgeResponse,
   buildIdempotencyKey,
   type DeliveryActionEdgeResponse,
+  type DeliveryProofConfirmResponse,
   type DeliveryProofEdgeResponse,
+  type DeliveryProofPrepareResponse,
   type DeliveryProofRequest,
   type DriverDeliveriesEdgeResponse,
+  type DriverLocationEdgeResponse,
+  type DriverLocationRequest,
   type DriverNotificationsEdgeResponse,
   type DriverProfileEdgeResponse,
   type EdgeErrorPayload,
@@ -47,12 +52,19 @@ const FRIENDLY_ERROR_MESSAGES: Record<string, string> = {
   DRIVER_PENDING: 'Votre compte est en attente de validation par JikJikoox Admin.',
   DRIVER_SUSPENDED: 'Votre compte livreur est suspendu.',
   DRIVER_DISABLED: 'Votre compte livreur est désactivé.',
+  ADMIN_FORBIDDEN: 'Accès réservé aux administrateurs JikJikoox Express.',
   MISSION_FORBIDDEN: 'Cette mission ne vous est pas attribuée.',
   MISSION_NOT_FOUND: 'Mission introuvable.',
   MISSION_LOCKED: 'Cette mission est déjà clôturée ou annulée.',
+  MISSION_NOT_ACTIVE_FOR_GPS: 'Suivi GPS arrêté : cette mission n’est plus en cours.',
   INVALID_TRANSITION: 'Cette étape n’est pas autorisée dans l’état actuel de la mission.',
   FORBIDDEN_FIELDS: 'Action refusée : certains champs ne sont pas modifiables.',
-  OFFLINE_NO_CONNECTION: 'Aucune connexion Internet détectée. Vérifiez vos données mobiles puis réessayez.',
+  STORAGE_UPLOAD_NOT_VERIFIED:
+    'La photo n’a pas encore été confirmée dans le stockage sécurisé. Réessayez l’envoi.',
+  PHOTO_UPLOAD_FAILED:
+    'Échec de l’envoi sécurisé de la photo. Vérifiez votre connexion puis réessayez.',
+  OFFLINE_NO_CONNECTION:
+    'Aucune connexion Internet détectée. Vérifiez vos données mobiles puis réessayez.',
   NETWORK_UNREACHABLE: 'Connexion au serveur impossible. Vérifiez votre réseau mobile.',
   REQUEST_TIMEOUT: 'Le serveur met trop de temps à répondre. Réessayez dans un instant.',
 };
@@ -198,7 +210,7 @@ export function createExpressApiClient(options: ExpressApiOptions = {}) {
         isAvailable?: boolean;
         notificationsEnabled?: boolean;
         pushSoundEnabled?: boolean;
-        fcmToken?: string;
+        fcmToken?: string | null;
       }
     ) {
       return request<DriverProfileEdgeResponse>('driver-profile', idToken, {
@@ -243,11 +255,108 @@ export function createExpressApiClient(options: ExpressApiOptions = {}) {
       });
     },
 
+    /** Phase 1 : Demande une URL signée courte durée (120s) sans écrire encore en base */
+    prepareDeliveryProofUpload(
+      idToken: string,
+      payload: Omit<DeliveryProofRequest, 'action'> & {
+        mimeType: 'image/jpeg' | 'image/png' | 'image/webp';
+        fileSizeBytes: number;
+      }
+    ) {
+      return request<DeliveryProofPrepareResponse>('delivery-proof', idToken, {
+        method: 'POST',
+        body: {
+          ...payload,
+          action: 'prepare-upload',
+        },
+        retryable: false,
+      });
+    },
+
+    /** Phase 2 : Envoi binaire direct vers l'URL signée Supabase Storage (aucune clé secrète) */
+    async uploadPhotoToSignedUrl(
+      signedUploadUrl: string,
+      file: Blob,
+      mimeType: string
+    ): Promise<void> {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), Math.max(timeoutMs, 20_000));
+      try {
+        const res = await fetchImpl(signedUploadUrl, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': mimeType,
+            'x-upsert': 'false',
+          },
+          body: file,
+          signal: controller.signal,
+        });
+        clearTimeout(timer);
+        if (!res.ok) {
+          throw new ExpressApiError(
+            'PHOTO_UPLOAD_FAILED',
+            FRIENDLY_ERROR_MESSAGES.PHOTO_UPLOAD_FAILED,
+            res.status
+          );
+        }
+      } catch (err) {
+        clearTimeout(timer);
+        if (err instanceof ExpressApiError) throw err;
+        const isAbort = err instanceof Error && err.name === 'AbortError';
+        throw new ExpressApiError(
+          isAbort ? 'REQUEST_TIMEOUT' : 'PHOTO_UPLOAD_FAILED',
+          isAbort
+            ? FRIENDLY_ERROR_MESSAGES.REQUEST_TIMEOUT
+            : FRIENDLY_ERROR_MESSAGES.PHOTO_UPLOAD_FAILED,
+          0
+        );
+      }
+    },
+
+    /** Phase 3 : Confirme l'existence réelle du fichier dans Storage et enregistre la preuve immuable */
+    confirmDeliveryProof(
+      idToken: string,
+      payload: Omit<DeliveryProofRequest, 'action'>
+    ) {
+      return request<DeliveryProofConfirmResponse>('delivery-proof', idToken, {
+        method: 'POST',
+        body: {
+          ...payload,
+          action: 'confirm-proof',
+        },
+        retryable: true,
+      });
+    },
+
     createDeliveryProof(idToken: string, payload: DeliveryProofRequest) {
       return request<DeliveryProofEdgeResponse>('delivery-proof', idToken, {
         method: 'POST',
         body: payload as unknown as Record<string, unknown>,
         retryable: false,
+      });
+    },
+
+    /** Envoi GPS temps réel pendant une mission active */
+    sendDriverLocation(idToken: string, payload: DriverLocationRequest) {
+      const idempotencyKey =
+        payload.idempotencyKey ||
+        `gps_${payload.deliveryId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 24)}_${Date.parse(payload.recordedAtIso) || Date.now()}`;
+      return request<DriverLocationEdgeResponse>('driver-location', idToken, {
+        method: 'POST',
+        idempotencyKey,
+        retryable: true,
+        body: {
+          ...payload,
+          idempotencyKey,
+        },
+      });
+    },
+
+    /** Carte temps réel réservée aux administrateurs autorisés */
+    fetchAdminFleetLocations(idToken: string) {
+      return request<AdminFleetLocationsEdgeResponse>('admin-driver-locations', idToken, {
+        method: 'GET',
+        retryable: true,
       });
     },
 
@@ -277,3 +386,4 @@ export function createExpressApiClient(options: ExpressApiOptions = {}) {
 }
 
 export const expressApi = createExpressApiClient();
+

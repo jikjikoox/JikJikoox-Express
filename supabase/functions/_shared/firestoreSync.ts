@@ -265,6 +265,10 @@ export async function syncMissionToFirestoreWithRetry(
   return { synced: false, attempts: maxAttempts, syncKey, errorMessage: lastError };
 }
 
+export interface FcmDispatchResult extends SyncExecutionResult {
+  tokenInvalid?: boolean;
+}
+
 export async function dispatchFcmNotificationSafe(
   params: {
     fcmToken: string | null | undefined;
@@ -272,11 +276,13 @@ export async function dispatchFcmNotificationSafe(
     body: string;
     missionId: string;
     syncVersion: number;
+    category?: string;
+    dedupeKey?: string;
   },
   cfg: FirebaseServiceAccountConfig | null,
   options: { fetchImpl?: typeof fetch } = {}
-): Promise<SyncExecutionResult> {
-  const syncKey = buildSyncKey(params.missionId, params.syncVersion, 'fcm');
+): Promise<FcmDispatchResult> {
+  const syncKey = params.dedupeKey || buildSyncKey(params.missionId, params.syncVersion, 'fcm');
   const fetchImpl = options.fetchImpl ?? fetch;
 
   if (!params.fcmToken) {
@@ -318,15 +324,42 @@ export async function dispatchFcmNotificationSafe(
           data: {
             missionId: params.missionId,
             syncVersion: String(params.syncVersion),
+            category: params.category || 'operational',
+            dedupeKey: syncKey,
+          },
+          webpush: {
+            headers: {
+              Urgency: 'high',
+            },
+            notification: {
+              tag: syncKey.slice(0, 64),
+              renotify: false,
+            },
+            fcm_options: {
+              link: `/?mission=${encodeURIComponent(params.missionId)}`,
+            },
           },
         },
       }),
     });
 
     if (!res.ok) {
-      return { synced: false, attempts: 1, syncKey, errorMessage: `FCM_HTTP_${res.status}` };
+      const errBody = await res.text().catch(() => '');
+      const upper = errBody.toUpperCase();
+      const tokenInvalid =
+        res.status === 404 ||
+        upper.includes('UNREGISTERED') ||
+        upper.includes('INVALID_REGISTRATION_TOKEN') ||
+        (res.status === 400 && upper.includes('NOT A VALID FCM REGISTRATION TOKEN'));
+      return {
+        synced: false,
+        attempts: 1,
+        syncKey,
+        tokenInvalid,
+        errorMessage: tokenInvalid ? 'FCM_TOKEN_INVALID' : `FCM_HTTP_${res.status}`,
+      };
     }
-    return { synced: true, attempts: 1, syncKey };
+    return { synced: true, attempts: 1, syncKey, tokenInvalid: false };
   } catch (err) {
     return {
       synced: false,

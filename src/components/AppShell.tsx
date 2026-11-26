@@ -6,6 +6,7 @@ import {
   History,
   Home,
   LogOut,
+  Map as MapIcon,
   Power,
   User as UserIcon,
   X,
@@ -23,7 +24,7 @@ interface AppShellProps {
   children: React.ReactNode;
 }
 
-const NAV_ITEMS: { id: AppTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+const BASE_NAV_ITEMS: { id: AppTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: 'dashboard', label: 'Accueil', icon: Home },
   { id: 'missions', label: 'Missions', icon: ClipboardList },
   { id: 'history', label: 'Historique', icon: History },
@@ -41,6 +42,7 @@ export function AppShell({
 }: AppShellProps) {
   const {
     mode,
+    isAdminUser,
     profile,
     unreadCount,
     toast,
@@ -48,6 +50,19 @@ export function AppShell({
     toggleAvailability,
     logout,
   } = useCourierApp();
+
+  const showFleetTab = isAdminUser || mode === 'demo';
+  const desktopNavItems = showFleetTab
+    ? [
+        BASE_NAV_ITEMS[0],
+        BASE_NAV_ITEMS[1],
+        { id: 'fleet' as AppTab, label: 'Carte GPS', icon: MapIcon },
+        BASE_NAV_ITEMS[2],
+        BASE_NAV_ITEMS[3],
+        BASE_NAV_ITEMS[4],
+      ]
+    : BASE_NAV_ITEMS;
+  const mobileNavItems = BASE_NAV_ITEMS;
 
   return (
     <div className="min-h-screen bg-[#F7F6F2] text-[#141413] flex flex-col lg:flex-row">
@@ -69,7 +84,7 @@ export function AppShell({
 
         {/* Navigation Links */}
         <nav aria-label="Navigation principale" className="flex-1 p-3 space-y-1">
-          {NAV_ITEMS.map((item) => {
+          {desktopNavItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
             return (
@@ -191,19 +206,36 @@ export function AppShell({
               )}
             </div>
 
-            {profile && (
-              <button
-                type="button"
-                onClick={() => void toggleAvailability()}
-                className={`min-h-[36px] px-3 rounded-lg text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
-                  profile.isAvailable
-                    ? 'bg-[#ECF7EE] text-[#0E6E2D]'
-                    : 'bg-[#EFECE4] text-[#5A5851]'
-                }`}
-              >
-                {profile.isAvailable ? 'Disponible' : 'Indisponible'}
-              </button>
-            )}
+            <div className="flex items-center gap-1.5 shrink-0">
+              {showFleetTab && (
+                <button
+                  type="button"
+                  onClick={() => onSelectTab('fleet')}
+                  aria-label="Ouvrir la carte GPS de la flotte"
+                  className={`min-w-[36px] min-h-[36px] px-2.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1 transition-colors cursor-pointer ${
+                    activeTab === 'fleet'
+                      ? 'bg-[#0E6E2D] text-white'
+                      : 'bg-[#F7F6F2] text-[#141413]'
+                  }`}
+                >
+                  <MapIcon className="w-4 h-4" aria-hidden="true" />
+                  <span className="sr-only sm:not-sr-only">GPS</span>
+                </button>
+              )}
+              {profile && (
+                <button
+                  type="button"
+                  onClick={() => void toggleAvailability()}
+                  className={`min-h-[36px] px-3 rounded-lg text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+                    profile.isAvailable
+                      ? 'bg-[#ECF7EE] text-[#0E6E2D]'
+                      : 'bg-[#EFECE4] text-[#5A5851]'
+                  }`}
+                >
+                  {profile.isAvailable ? 'Disponible' : 'Indisponible'}
+                </button>
+              )}
+            </div>
           </div>
         </header>
 
@@ -294,7 +326,7 @@ export function AppShell({
         className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-[#E5E2D9] pb-safe"
       >
         <div className="grid grid-cols-5 h-[60px] items-center">
-          {NAV_ITEMS.map((item) => {
+          {mobileNavItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
             return (

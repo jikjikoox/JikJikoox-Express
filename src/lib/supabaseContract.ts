@@ -114,22 +114,93 @@ export interface DeliveryActionEdgeResponse {
 }
 
 export interface DeliveryProofRequest {
+  action?: 'prepare-upload' | 'confirm-proof';
   deliveryId: string;
   recipientName: string;
+  proofId?: string;
+  storagePath?: string | null;
   proofCode?: string;
   proofNote?: string;
   codCollectedConfirmed: boolean;
   mimeType?: 'image/jpeg' | 'image/png' | 'image/webp';
   fileSizeBytes?: number;
+  gpsLat?: number;
+  gpsLng?: number;
+}
+
+export interface DeliveryProofPrepareResponse {
+  ok: true;
+  phase: 'upload_prepared';
+  proofId: string;
+  storagePath: string;
+  signedUploadUrl: string;
+  expiresAtIso: string;
+}
+
+export interface DeliveryProofConfirmResponse {
+  ok: true;
+  phase: 'confirmed';
+  proofId: string;
+  storagePath: string | null;
+  uploadVerified: boolean;
+  createdAt: string;
 }
 
 export interface DeliveryProofEdgeResponse {
   ok: true;
+  phase?: 'upload_prepared' | 'confirmed';
   proofId: string;
   storagePath: string | null;
-  signedUploadUrl: string | null;
-  expiresAtIso: string | null;
-  createdAt: string;
+  signedUploadUrl?: string | null;
+  expiresAtIso?: string | null;
+  uploadVerified?: boolean;
+  createdAt?: string;
+}
+
+export interface DriverLocationRequest {
+  deliveryId: string;
+  lat: number;
+  lng: number;
+  accuracyMeters?: number | null;
+  speedMps?: number | null;
+  headingDeg?: number | null;
+  recordedAtIso: string;
+  idempotencyKey?: string;
+}
+
+export interface DriverLocationEdgeResponse {
+  ok: true;
+  locationId: string | null;
+  deliveryId: string;
+  recordedAtIso: string;
+  idempotentReplay: boolean;
+  throttled: boolean;
+}
+
+export interface AdminFleetLocationsEdgeResponse {
+  ok: true;
+  generatedAtIso: string;
+  activeCount: number;
+  drivers: Array<{
+    driverId: string;
+    driverFirebaseUid: string;
+    driverName: string;
+    driverPhone: string;
+    vehicleType: VehicleType;
+    workZone: string;
+    isAvailable: boolean;
+    activeDeliveryId: string | null;
+    orderNumber: string | null;
+    deliveryStatus: MissionStatus | null;
+    deliveryZone: string | null;
+    lat: number;
+    lng: number;
+    accuracyMeters: number | null;
+    speedMps: number | null;
+    headingDeg: number | null;
+    recordedAtIso: string;
+    updatedAtIso: string;
+  }>;
 }
 
 export interface DriverNotificationsEdgeResponse {

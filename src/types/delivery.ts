@@ -26,7 +26,7 @@ export type NotificationCategory =
   | 'operational'
   | 'confirmation';
 
-export type AppTab = 'dashboard' | 'missions' | 'history' | 'notifications' | 'profile';
+export type AppTab = 'dashboard' | 'missions' | 'fleet' | 'history' | 'notifications' | 'profile';
 
 export interface MissionItem {
   name: string;
@@ -109,4 +109,49 @@ export interface ProofSubmission {
   proofCode?: string;
   proofNote?: string;
   codCollectedConfirmed?: boolean;
+  proofId?: string;
+  photoStoragePath?: string;
+  photoUploadVerified?: boolean;
+  gpsLat?: number;
+  gpsLng?: number;
 }
+
+export type GpsPermissionState = 'prompt' | 'granted' | 'denied' | 'unsupported';
+
+export interface GpsPositionSnapshot {
+  lat: number;
+  lng: number;
+  accuracyMeters: number | null;
+  speedMps: number | null;
+  headingDeg: number | null;
+  recordedAtIso: string;
+}
+
+export interface AdminFleetDriverPosition {
+  driverId: string;
+  driverFirebaseUid: string;
+  driverName: string;
+  driverPhone: string;
+  vehicleType: VehicleType;
+  workZone: string;
+  isAvailable: boolean;
+  activeDeliveryId: string | null;
+  orderNumber: string | null;
+  deliveryStatus: MissionStatus | null;
+  deliveryZone: string | null;
+  lat: number;
+  lng: number;
+  accuracyMeters: number | null;
+  speedMps: number | null;
+  headingDeg: number | null;
+  recordedAtIso: string;
+  updatedAtIso: string;
+}
+
+export type PushSupportState =
+  | 'ready'
+  | 'permission_prompt'
+  | 'permission_denied'
+  | 'vapid_missing'
+  | 'unsupported';
+

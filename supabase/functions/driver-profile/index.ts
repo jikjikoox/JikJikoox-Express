@@ -104,9 +104,14 @@ export async function handleDriverProfileRequest(req: Request): Promise<Response
       if (typeof raw.pushSoundEnabled === 'boolean') {
         patch.push_sound_enabled = raw.pushSoundEnabled;
       }
-      if (typeof raw.fcmToken === 'string' && raw.fcmToken.trim().length > 20) {
+      if (raw.fcmToken === null || raw.fcmToken === '') {
+        patch.fcm_token = null;
+        patch.fcm_token_updated_at = new Date().toISOString();
+        patch.fcm_token_invalidated_at = null;
+      } else if (typeof raw.fcmToken === 'string' && raw.fcmToken.trim().length > 20) {
         patch.fcm_token = raw.fcmToken.trim().slice(0, 512);
         patch.fcm_token_updated_at = new Date().toISOString();
+        patch.fcm_token_invalidated_at = null;
       }
 
       const updated = await supabaseRest<DriverRecord[]>(
