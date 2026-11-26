@@ -9,12 +9,12 @@
 
 | Composant | Production (PROTÉGÉ — NE PAS TOUCHER) | Staging (À PROVISIONNER) |
 |---|---|---|
-| Domaine Express | `https://livraison.jikjikoox.com` | `https://staging-livraison.jikjikoox.com` (ou sous-domaine staging dédié) |
-| Domaine Admin | `https://admin.jikjikoox.com` | `https://staging-admin.jikjikoox.com` |
-| Projet Firebase | `livraisonjikjikoox` | `livraisonjikjikoox-staging` |
-| Auth Domain Firebase | `livraisonjikjikoox.firebaseapp.com` | `livraisonjikjikoox-staging.firebaseapp.com` |
-| Storage Bucket Firebase | `livraisonjikjikoox.firebasestorage.app` | `livraisonjikjikoox-staging.firebasestorage.app` |
-| Projet Supabase | Projet marketplace officiel JikJikoox | Nouveau projet Supabase dédié (`jikjikoox-staging`) |
+| Domaine Express | `https://livraison.jikjikoox.com` | `https://staging-livraison.jikjikoox.com` |
+| Domaine Admin | `https://admin.jikjikoox.com` | Non inclus dans ce déploiement Express staging |
+| Projet Firebase | `livraisonjikjikoox` | `jikjikoox-express-staging` (projet staging confirmé) |
+| Auth Domain Firebase | `livraisonjikjikoox.firebaseapp.com` | Valeur exacte à relever dans les paramètres de `jikjikoox-express-staging` |
+| Storage Bucket Firebase | `livraisonjikjikoox.firebasestorage.app` | Bucket exact à relever dans `jikjikoox-express-staging` |
+| Projet Supabase | Projet marketplace officiel JikJikoox (`dllafwvyfjodblxhshko`) | `jikjikoox-express-staging` (`bwicndbbxvthbddiacks`) |
 | Variable `VITE_APP_ENV` | `production` (ou non staging) | `staging` (active le blocage anti-prod dans `src/lib/firebase.ts`) |
 | Fichier env local | Jamais versionné | `.env.staging` (créé à partir de `.env.staging.example`, ignoré par Git) |
 
@@ -81,28 +81,28 @@ Configurer uniquement sur `<STAGING_PROJECT_REF>` (sans jamais stocker de valeur
 supabase secrets set --project-ref <STAGING_PROJECT_REF> \
   SUPABASE_URL="https://<STAGING_PROJECT_REF>.supabase.co" \
   SUPABASE_SERVICE_ROLE_KEY="<STAGING_SERVICE_ROLE_KEY>" \
-  FIREBASE_PROJECT_ID="livraisonjikjikoox-staging" \
+  FIREBASE_PROJECT_ID="jikjikoox-express-staging" \
   FIRESTORE_DATABASE_ID="(default)" \
   FIREBASE_SERVICE_ACCOUNT_EMAIL="<STAGING_SA_EMAIL>" \
   FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY="<STAGING_SA_PRIVATE_KEY_ESCAPED>" \
-  ALLOWED_ORIGINS="https://staging-livraison.jikjikoox.com,https://staging-admin.jikjikoox.com" \
+  ALLOWED_ORIGINS="https://staging-livraison.jikjikoox.com" \
   INTERNAL_SYNC_SECRET="<RANDOM_32_BYTES_HEX_STAGING>"
 ```
 
 ---
 
-## 3. Procédure Firebase Staging (`livraisonjikjikoox-staging`)
+## 3. Procédure Firebase Staging (`jikjikoox-express-staging`)
 
-1. **Créer un projet Firebase indépendant** : `livraisonjikjikoox-staging` (sans lier ni copier les clés de `livraisonjikjikoox`).
-2. **Firebase Authentication** : activer le fournisseur **Google Sign-In**, configurer l’email de support staging et ajouter dans **Authorized domains** uniquement les domaines staging (ex. `staging-livraison.jikjikoox.com`, `localhost`).
+1. Utiliser le projet Firebase staging déjà créé et confirmé : `jikjikoox-express-staging` (sans lier ni copier les clés de `livraisonjikjikoox`).
+2. **Firebase Authentication** : vérifier que Google Sign-In est activé et ajouter `staging-livraison.jikjikoox.com` dans **Authorized domains** du projet staging. Conserver `localhost` uniquement pour les tests locaux.
 3. **Cloud Firestore** : créer la base `(default)` en mode production (refus par défaut).
-4. **Firebase Storage** : activer le bucket `livraisonjikjikoox-staging.firebasestorage.app`.
+4. **Firebase Storage** : vérifier le bucket réellement associé à `jikjikoox-express-staging` et renseigner son nom exact dans `VITE_FIREBASE_STORAGE_BUCKET`.
 5. **Firebase Cloud Messaging (FCM)** : générer une paire de clés Web Push (VAPID) dédiée au projet staging.
-6. **Compte de service backend staging** : dans *Paramètres du projet → Comptes de service*, créer un compte de service restreint pour la synchronisation Supabase → Firestore/FCM du projet **`livraisonjikjikoox-staging` uniquement**.
+6. **Compte de service backend staging** : dans *Paramètres du projet → Comptes de service*, créer un compte de service restreint pour la synchronisation Supabase → Firestore/FCM du projet **`jikjikoox-express-staging` uniquement**.
 7. **Déployer règles & index sur staging uniquement** :
    ```bash
-   firebase use livraisonjikjikoox-staging
-   firebase deploy --only firestore:rules,firestore:indexes,storage --project livraisonjikjikoox-staging
+   firebase use jikjikoox-express-staging
+   firebase deploy --only firestore:rules,firestore:indexes,storage --project jikjikoox-express-staging
    ```
 
 ### Configurations de production à NE JAMAIS copier en staging
@@ -143,7 +143,7 @@ npm run build:staging
 Tous les 8 secrets suivants sont effectivement utilisés dans `supabase/functions/_shared/supabaseAdmin.ts` :
 1. `SUPABASE_URL` — requis (PostgREST, RPC, Storage sign).
 2. `SUPABASE_SERVICE_ROLE_KEY` — requis (accès serveur RLS bypass contrôlé).
-3. `FIREBASE_PROJECT_ID` — requis en staging (`livraisonjikjikoox-staging` ; sans lui le code retombe sur la valeur par défaut `livraisonjikjikoox`, donc **obligatoire**).
+3. `FIREBASE_PROJECT_ID` — requis en staging (`jikjikoox-express-staging` ; sans lui le code retombe sur la valeur par défaut de production `livraisonjikjikoox`, donc **obligatoire**).
 4. `FIRESTORE_DATABASE_ID` — requis (`(default)` en staging).
 5. `FIREBASE_SERVICE_ACCOUNT_EMAIL` — requis pour synchroniser Firestore et envoyer FCM v1.
 6. `FIREBASE_SERVICE_ACCOUNT_PRIVATE_KEY` — requis (clé PKCS#8 du compte de service staging uniquement).
@@ -154,7 +154,7 @@ Tous les 8 secrets suivants sont effectivement utilisés dans `supabase/function
 
 ## 5. Création manuelle des comptes & données de test (STAGING UNIQUEMENT)
 
-1. Créer 4 comptes Google dédiés aux tests QA (ou comptes Auth staging) et récupérer leur `firebase_uid` dans Firebase Console (`livraisonjikjikoox-staging`).
+1. Créer 4 comptes Google dédiés aux tests QA (ou comptes Auth staging) et récupérer leur `firebase_uid` dans Firebase Console (`jikjikoox-express-staging`).
 2. Insérer les 4 profils dans `public.express_drivers` (**Supabase staging uniquement**) :
    - **Livreur A** : `account_status = 'active'`, `is_available = true`, `work_zone = 'Almadies & Ngor'`
    - **Livreur B** : `account_status = 'active'`, `is_available = true`, `work_zone = 'Dakar Plateau'`
