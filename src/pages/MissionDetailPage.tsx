@@ -485,7 +485,7 @@ export function MissionDetailPage({ missionId, onBack }: MissionDetailPageProps)
                   </button>
                 )}
 
-                {isCod && mission.status !== 'DELIVERED' && (
+                {isCod && mission.status === 'ARRIVED' && (
                   <button
                     type="button"
                     disabled={busyStatus !== null || codPaymentBusy}
