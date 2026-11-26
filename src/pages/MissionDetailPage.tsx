@@ -13,6 +13,7 @@ import {
   MessageSquareText,
   Package,
   Phone,
+  QrCode,
   Store,
 } from 'lucide-react';
 import { StatusIndicator } from '../components/StatusIndicator';
@@ -26,11 +27,18 @@ import {
   maskPhoneNumber,
   MISSION_STATUS_META,
 } from '../lib/missionWorkflow';
+import type { QrValidationSuccess } from '../lib/qrParcelValidation';
 import type { MissionStatus, ProofSubmission } from '../types/delivery';
 
 const ProofOfDeliverySheet = lazy(() =>
   import('../components/ProofOfDeliverySheet').then((m) => ({
     default: m.ProofOfDeliverySheet,
+  }))
+);
+
+const QrScannerModal = lazy(() =>
+  import('../components/QrScannerModal').then((m) => ({
+    default: m.QrScannerModal,
   }))
 );
 
@@ -47,6 +55,8 @@ export function MissionDetailPage({ missionId, onBack }: MissionDetailPageProps)
   const [phoneVisible, setPhoneVisible] = useState(false);
   const [busyStatus, setBusyStatus] = useState<MissionStatus | null>(null);
   const [activeSheet, setActiveSheet] = useState<'proof' | 'failure' | null>(null);
+  const [qrScannerOpen, setQrScannerOpen] = useState(false);
+  const [pendingQrValidation, setPendingQrValidation] = useState<QrValidationSuccess | null>(null);
 
   if (!mission) {
     return (
@@ -94,10 +104,42 @@ export function MissionDetailPage({ missionId, onBack }: MissionDetailPageProps)
 
   const handleConfirmDelivery = async (proof: ProofSubmission) => {
     await executeTransition(mission.missionId, 'DELIVERED', { proof });
+    setPendingQrValidation(null);
   };
 
   const handleConfirmFailure = async (failureReason: string) => {
     await executeTransition(mission.missionId, 'FAILED', { failureReason });
+  };
+
+  const handleInstantQrValidated = async (result: QrValidationSuccess) => {
+    setQrScannerOpen(false);
+    // Pour un colis prépayé, le scan QR valide instantanément la livraison.
+    if (!isCod) {
+      setBusyStatus('DELIVERED');
+      try {
+        await executeTransition(mission.missionId, 'DELIVERED', {
+          proof: {
+            recipientName: mission.customerName,
+            proofCode: result.proofCodeValue,
+            proofNote: result.verificationNote,
+            codCollectedConfirmed: true,
+          },
+        });
+      } finally {
+        setBusyStatus(null);
+      }
+      return;
+    }
+
+    // Pour un colis COD, le colis est vérifié par QR et le livreur confirme l'encaissement espèces.
+    setPendingQrValidation(result);
+    setActiveSheet('proof');
+    showToast(
+      `Colis ${result.displayRef} vérifié par QR. Confirmez l’encaissement de ${formatFcfa(
+        mission.codAmount
+      )}.`,
+      'green'
+    );
   };
 
   const handleCopyGps = async () => {
@@ -353,32 +395,63 @@ export function MissionDetailPage({ missionId, onBack }: MissionDetailPageProps)
 
             {actions.length > 0 ? (
               <div className="space-y-2.5">
-                {actions.map((action) => (
+                {mission.status === 'ARRIVED' && (
                   <button
-                    key={action.nextStatus}
                     type="button"
                     disabled={busyStatus !== null}
-                    onClick={() =>
-                      void handleActionClick(
-                        action.nextStatus,
-                        action.requiresProof,
-                        action.requiresFailureReason
-                      )
-                    }
-                    className={`w-full min-h-[52px] px-4 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-60 ${
-                      action.variant === 'primary'
-                        ? 'bg-[#0E6E2D] hover:bg-[#095220] text-white'
-                        : action.variant === 'danger'
-                        ? 'bg-[#FDF0EE] hover:bg-[#FCE2DE] text-[#C6241B] border border-[#C6241B]/25'
-                        : 'bg-[#F7F6F2] hover:bg-[#EFECE4] text-[#141413] border border-[#D6D1C4]'
-                    }`}
+                    onClick={() => setQrScannerOpen(true)}
+                    className="w-full min-h-[54px] px-4 rounded-xl bg-[#0E6E2D] hover:bg-[#095220] text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-60"
                   >
-                    {busyStatus === action.nextStatus ? 'Mise à jour...' : action.label}
+                    <QrCode className="w-5 h-5 shrink-0" aria-hidden="true" />
+                    <span>
+                      {busyStatus === 'DELIVERED'
+                        ? 'Validation en cours...'
+                        : isCod
+                        ? 'Scanner le QR du colis (COD)'
+                        : 'Scanner le QR pour valider'}
+                    </span>
                   </button>
-                ))}
+                )}
+
+                {actions.map((action) => {
+                  const isManualDeliverySecondary =
+                    mission.status === 'ARRIVED' && action.nextStatus === 'DELIVERED';
+                  return (
+                    <button
+                      key={action.nextStatus}
+                      type="button"
+                      disabled={busyStatus !== null}
+                      onClick={() =>
+                        void handleActionClick(
+                          action.nextStatus,
+                          action.requiresProof,
+                          action.requiresFailureReason
+                        )
+                      }
+                      className={`w-full min-h-[52px] px-4 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-60 ${
+                        isManualDeliverySecondary
+                          ? 'bg-[#ECF7EE] hover:bg-[#DFF1E3] text-[#0E6E2D] border border-[#0E6E2D]/25'
+                          : action.variant === 'primary'
+                          ? 'bg-[#0E6E2D] hover:bg-[#095220] text-white'
+                          : action.variant === 'danger'
+                          ? 'bg-[#FDF0EE] hover:bg-[#FCE2DE] text-[#C6241B] border border-[#C6241B]/25'
+                          : 'bg-[#F7F6F2] hover:bg-[#EFECE4] text-[#141413] border border-[#D6D1C4]'
+                      }`}
+                    >
+                      {busyStatus === action.nextStatus
+                        ? 'Mise à jour...'
+                        : isManualDeliverySecondary
+                        ? 'Validation manuelle (sans scan)'
+                        : action.label}
+                    </button>
+                  );
+                })}
                 <p className="text-xs text-[#5A5851] leading-relaxed">
-                  Seules les transitions autorisées par le workflow JikJikoox sont activées à chaque
-                  étape.
+                  {mission.status === 'ARRIVED'
+                    ? isCod
+                      ? 'Scannez le QR code du colis pour vérifier l’étiquette puis confirmez le montant encaissé.'
+                      : 'Scannez le QR code du colis avec la caméra pour valider instantanément la livraison.'
+                    : 'Seules les transitions autorisées par le workflow JikJikoox sont activées à chaque étape.'}
                 </p>
               </div>
             ) : (
@@ -466,9 +539,25 @@ export function MissionDetailPage({ missionId, onBack }: MissionDetailPageProps)
           <ProofOfDeliverySheet
             mission={mission}
             sheetMode={activeSheet}
-            onClose={() => setActiveSheet(null)}
+            initialQrValidation={pendingQrValidation}
+            onClose={() => {
+              setActiveSheet(null);
+              setPendingQrValidation(null);
+            }}
             onConfirmDelivery={handleConfirmDelivery}
             onConfirmFailure={handleConfirmFailure}
+          />
+        </Suspense>
+      )}
+
+      {/* Camera QR Code Scanner Modal (lazy-loaded on demand) */}
+      {qrScannerOpen && (
+        <Suspense fallback={null}>
+          <QrScannerModal
+            mission={mission}
+            instantDeliveryOnMatch={!isCod}
+            onClose={() => setQrScannerOpen(false)}
+            onValidated={handleInstantQrValidated}
           />
         </Suspense>
       )}
