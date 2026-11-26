@@ -9,7 +9,7 @@ async function fetchChecked(url) {
   });
 }
 
-const root = await fetchChecked(baseUrl);
+const root = await fetchChecked(`${baseUrl}/?__smoke=${Date.now()}`);
 if (!root.ok) throw new Error(`Express root failed: HTTP ${root.status} ${root.url}`);
 if (!(root.headers.get('content-type') || '').includes('text/html')) {
   throw new Error(`Express root is not HTML: ${root.headers.get('content-type')}`);
@@ -28,6 +28,8 @@ if (!asset.ok || !/(javascript|ecmascript)/i.test(asset.headers.get('content-typ
 }
 const bundle = await asset.text();
 if (!bundle.trim() || /<html[\s>]/i.test(bundle.slice(0, 400))) throw new Error('Express JS bundle empty or HTML fallback.');
+const backendEndpoints = [...new Set(bundle.match(/https:\/\/[a-z0-9-]+\.supabase\.co\/functions\/v1/g) || [])];
+console.log(`Supabase endpoints in deployed Express bundle: ${backendEndpoints.join(', ') || '(none found)'}`);
 if (!bundle.includes('https://dllafwvyfjodblxhshko.supabase.co/functions/v1')) {
   throw new Error('Production bundle is not configured for the JikJikoox marketplace Supabase project.');
 }
