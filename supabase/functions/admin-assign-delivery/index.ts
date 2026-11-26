@@ -123,7 +123,73 @@ const handleRequest = async (req: Request): Promise<Response> => {
       if (matched) return fail(matched[1][0], matched[1][1], matched[1][2], headers);
       return fail("ASSIGNMENT_FAILED", "L’affectation n’a pas pu être enregistrée.", 502, headers);
     }
-    return json({ ok: true, assignment: rpcBody }, 201, headers);
+    const deliveryId = String(rpcBody?.delivery_id || "");
+    const syncSecret = getEnv("INTERNAL_SYNC_SECRET");
+    let sync: Record<string, unknown> = {
+      attempted: false,
+      firestoreSynced: false,
+      fcmSynced: false,
+    };
+    let syncHandled = false;
+
+    if (syncSecret && deliveryId) {
+      try {
+        const syncRes = await fetch(`${supabaseUrl}/functions/v1/sync-assignment-to-firestore`, {
+          method: "POST",
+          headers: {
+            apikey: serviceKey,
+            Authorization: `Bearer ${serviceKey}`,
+            "Content-Type": "application/json",
+            "x-internal-sync-secret": syncSecret,
+          },
+          body: JSON.stringify({ deliveryId, eventCategory: "assignment" }),
+        });
+        const syncBody = await syncRes.json().catch(() => null);
+        syncHandled = syncRes.ok && syncBody?.ok === true;
+        sync = {
+          attempted: true,
+          endpointOk: syncRes.ok,
+          firestoreSynced: syncBody?.firestore?.synced === true,
+          fcmSynced: syncBody?.fcm?.synced === true,
+        };
+      } catch {
+        sync = { attempted: true, firestoreSynced: false, fcmSynced: false, error: "SYNC_UNREACHABLE" };
+      }
+    }
+
+    // Always retain an in-app notification if the internal Firestore/FCM sync is unavailable.
+    if (!syncHandled && deliveryId) {
+      const missionRes = await fetch(
+        `${supabaseUrl}/rest/v1/express_deliveries?id=eq.${encodeURIComponent(deliveryId)}&select=driver_id,driver_firebase_uid,mission_code&limit=1`,
+        { headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` } },
+      );
+      const missions = missionRes.ok ? await missionRes.json().catch(() => []) : [];
+      const mission = Array.isArray(missions) ? missions[0] : null;
+      if (mission) {
+        await fetch(`${supabaseUrl}/rest/v1/express_notifications`, {
+          method: "POST",
+          headers: {
+            apikey: serviceKey,
+            Authorization: `Bearer ${serviceKey}`,
+            "Content-Type": "application/json",
+            Prefer: "resolution=ignore-duplicates",
+          },
+          body: JSON.stringify({
+            driver_id: mission.driver_id,
+            driver_firebase_uid: mission.driver_firebase_uid,
+            delivery_id: deliveryId,
+            category: "assignment",
+            title: "Nouvelle mission JikJikoox",
+            body: `Une nouvelle livraison ${mission.mission_code} vous a été attribuée.`,
+            dedupe_key: `assignment:${deliveryId}:v1`,
+            fcm_dispatch_status: "pending",
+          }),
+        });
+        sync = { ...sync, inAppNotificationPersisted: true };
+      }
+    }
+
+    return json({ ok: true, assignment: rpcBody, sync }, 201, headers);
   } catch {
     return fail("INTERNAL_ERROR", "Erreur interne du service d’affectation.", 500, headers);
   }
