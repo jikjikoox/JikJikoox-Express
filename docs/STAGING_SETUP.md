@@ -80,7 +80,7 @@ supabase functions deploy sync-assignment-to-firestore --project-ref bwicndbbxvt
 Configurer uniquement sur `bwicndbbxvthbddiacks` (sans jamais stocker de valeurs dans Git) :
 ```bash
 supabase secrets set --project-ref bwicndbbxvthbddiacks \
-  SUPABASE_URL="https://<STAGING_PROJECT_REF>.supabase.co" \
+  SUPABASE_URL="https://bwicndbbxvthbddiacks.supabase.co" \
   SUPABASE_SERVICE_ROLE_KEY="<STAGING_SERVICE_ROLE_KEY>" \
   FIREBASE_PROJECT_ID="jikjikoox-express-staging" \
   FIRESTORE_DATABASE_ID="(default)" \
