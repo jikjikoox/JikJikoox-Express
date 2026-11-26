@@ -103,8 +103,7 @@ export function QRCodeScanner({
         } catch (error) {
           setMismatchMessage(error instanceof Error ? error.message : "QR de paiement refusé.");
           lockedRef.current = false;
-          setCameraStatus("active");
-          void startCamera();
+          setCameraStatus("error");
         } finally {
           setFinalizing(false);
         }
@@ -146,7 +145,7 @@ export function QRCodeScanner({
         setFinalizing(false);
       }
     },
-    [mission, onValidated, codPaymentMode, onCodPayload, onClose, stopCamera, startCamera]
+    [mission, onValidated, codPaymentMode, onCodPayload, onClose, stopCamera]
   );
 
   const startCamera = useCallback(async () => {
