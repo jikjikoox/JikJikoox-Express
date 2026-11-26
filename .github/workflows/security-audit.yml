@@ -21,7 +21,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Gitleaks scan
-        run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.28.0 detect --source=/repo --redact --exit-code 1 --no-git
+        run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.28.0 detect --source=/repo --redact --exit-code 1
 
   build-check:
     name: Build and static checks
