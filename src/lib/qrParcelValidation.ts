@@ -102,7 +102,7 @@ export function parseParcelQrPayload(rawPayload: string): ParsedParcelQr {
       return {
         raw,
         orderNumber: (qOrder || lastSegment)?.trim() || undefined,
-        missionId: qMission?.trim() || undefined,
+        missionId: (qMission || lastSegment)?.trim() || undefined,
         proofCode: qCode?.trim() || undefined,
       };
     } catch {
@@ -110,7 +110,7 @@ export function parseParcelQrPayload(rawPayload: string): ParsedParcelQr {
     }
   }
 
-  // 3. Format délimité par "|" (ex: JKX|JKX-2026-8412|4829)
+  // 3. Format délimité par "|" (ex: JKX|JKX-2026-8412|4829 ou JKX|msn_demo_01|4829)
   if (raw.includes('|')) {
     const parts = raw
       .split('|')
@@ -120,17 +120,20 @@ export function parseParcelQrPayload(rawPayload: string): ParsedParcelQr {
       return {
         raw,
         orderNumber: parts[1],
+        missionId: parts[1],
         proofCode: parts[2],
       };
     }
   }
 
-  // 4. Format préfixé "JKX:..." ou "ORDER:..."
-  const prefixMatch = raw.match(/^(?:JKX|ORDER|COLIS|REF)\s*[:=#]\s*(.+)$/i);
+  // 4. Format préfixé "JKX:...", "ORDER:...", "MISSION:...", "ID:..."
+  const prefixMatch = raw.match(/^(?:JKX|ORDER|COLIS|REF|MISSION|ID)\s*[:=#]\s*(.+)$/i);
   if (prefixMatch?.[1]) {
+    const extracted = prefixMatch[1].trim();
     return {
       raw,
-      orderNumber: prefixMatch[1].trim(),
+      orderNumber: extracted,
+      missionId: extracted,
     };
   }
 
@@ -143,7 +146,8 @@ export function parseParcelQrPayload(rawPayload: string): ParsedParcelQr {
 }
 
 /**
- * Valide un QR code scanné par rapport à la mission de livraison en cours.
+ * Valide un QR code scanné par rapport à la mission de livraison en cours
+ * (correspondance sur l'ID de mission ou le numéro de commande).
  * Empêche toute remise du mauvais colis.
  */
 export function validateParcelQrForMission(
@@ -168,24 +172,25 @@ export function validateParcelQrForMission(
 
   let matchedBy: 'orderNumber' | 'missionId' | null = null;
   if (
+    candidateMission === expectedMissionId ||
+    normalizedRaw === expectedMissionId ||
+    (expectedMissionId.length >= 6 && normalizedRaw.includes(expectedMissionId))
+  ) {
+    matchedBy = 'missionId';
+  } else if (
     candidateOrder === expectedOrder ||
     normalizedRaw === expectedOrder ||
     normalizedRaw.includes(expectedOrder)
   ) {
     matchedBy = 'orderNumber';
-  } else if (
-    candidateMission === expectedMissionId ||
-    normalizedRaw === expectedMissionId
-  ) {
-    matchedBy = 'missionId';
   }
 
   if (!matchedBy) {
-    const scannedSummary = (parsed.orderNumber || parsed.missionId || parsed.raw).slice(0, 48);
+    const scannedSummary = (parsed.missionId || parsed.orderNumber || parsed.raw).slice(0, 48);
     return {
       ok: false,
       scannedSummary,
-      message: `Colis non concordant : QR scanné « ${scannedSummary} » au lieu de « ${mission.orderNumber} ».`,
+      message: `Mission non concordante : QR scanné « ${scannedSummary} » au lieu de « ${mission.orderNumber} » (${mission.missionId}).`,
     };
   }
 
@@ -202,9 +207,9 @@ export function validateParcelQrForMission(
   return {
     ok: true,
     matchedBy,
-    displayRef: mission.orderNumber,
+    displayRef: matchedBy === 'missionId' ? `${mission.orderNumber} (${mission.missionId})` : mission.orderNumber,
     proofCodeValue,
-    verificationNote: `Colis validé par scan QR (${mission.orderNumber}) à ${timeLabel}.`,
+    verificationNote: `Colis validé par scan QR (${mission.orderNumber} / ${mission.missionId}) à ${timeLabel}.`,
     scannedAtIso,
     rawPayload: parsed.raw,
   };

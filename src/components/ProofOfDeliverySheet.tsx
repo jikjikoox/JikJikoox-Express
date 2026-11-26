@@ -4,9 +4,9 @@ import { FAILURE_REASONS, formatFcfa } from '../lib/missionWorkflow';
 import type { QrValidationSuccess } from '../lib/qrParcelValidation';
 import type { DeliveryMission, ProofSubmission } from '../types/delivery';
 
-const QrScannerModal = lazy(() =>
-  import('./QrScannerModal').then((m) => ({
-    default: m.QrScannerModal,
+const QRCodeScanner = lazy(() =>
+  import('./QRCodeScanner').then((m) => ({
+    default: m.QRCodeScanner,
   }))
 );
 
@@ -333,7 +333,7 @@ export function ProofOfDeliverySheet({
 
       {scannerOpen && (
         <Suspense fallback={null}>
-          <QrScannerModal
+          <QRCodeScanner
             mission={mission}
             instantDeliveryOnMatch={false}
             onClose={() => setScannerOpen(false)}

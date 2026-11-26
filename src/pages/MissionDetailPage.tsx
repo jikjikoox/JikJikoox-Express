@@ -36,9 +36,9 @@ const ProofOfDeliverySheet = lazy(() =>
   }))
 );
 
-const QrScannerModal = lazy(() =>
-  import('../components/QrScannerModal').then((m) => ({
-    default: m.QrScannerModal,
+const QRCodeScanner = lazy(() =>
+  import('../components/QRCodeScanner').then((m) => ({
+    default: m.QRCodeScanner,
   }))
 );
 
@@ -553,7 +553,7 @@ export function MissionDetailPage({ missionId, onBack }: MissionDetailPageProps)
       {/* Camera QR Code Scanner Modal (lazy-loaded on demand) */}
       {qrScannerOpen && (
         <Suspense fallback={null}>
-          <QrScannerModal
+          <QRCodeScanner
             mission={mission}
             instantDeliveryOnMatch={!isCod}
             onClose={() => setQrScannerOpen(false)}

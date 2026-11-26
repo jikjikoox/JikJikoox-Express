@@ -27,7 +27,7 @@ interface BarcodeDetectorCtor {
   new (options?: { formats?: string[] }): BarcodeDetectorLike;
 }
 
-export interface QrScannerModalProps {
+export interface QRCodeScannerProps {
   mission: DeliveryMission;
   instantDeliveryOnMatch?: boolean;
   onClose: () => void;
@@ -36,12 +36,17 @@ export interface QrScannerModalProps {
 
 type CameraStatus = 'starting' | 'active' | 'error' | 'matched';
 
-export function QrScannerModal({
+/**
+ * Scanner QR code natif basé sur navigator.mediaDevices.getUserMedia()
+ * avec décodage hybride BarcodeDetector + jsQR, torche, inversion de caméra
+ * et import d'image en secours pour valider instantanément l'ID d'une mission.
+ */
+export function QRCodeScanner({
   mission,
   instantDeliveryOnMatch = false,
   onClose,
   onValidated,
-}: QrScannerModalProps) {
+}: QRCodeScannerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -132,12 +137,11 @@ export function QrScannerModal({
     if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
       setCameraStatus('error');
       setCameraError(
-        'Votre navigateur ne permet pas l’accès direct à la caméra. Utilisez « Importer une photo QR » ci-dessous.'
+        'Votre navigateur ne permet pas l’accès direct à la caméra. Utilisez « Importer photo QR » ci-dessous.'
       );
       return;
     }
 
-    // Initialise BarcodeDetector natif si disponible (accélération matérielle Android Chrome)
     if (!detectorRef.current && typeof window !== 'undefined' && 'BarcodeDetector' in window) {
       try {
         const Ctor = (window as unknown as { BarcodeDetector: BarcodeDetectorCtor })
@@ -187,7 +191,6 @@ export function QrScannerModal({
           return;
         }
 
-        // Cadence optimisée ~130ms pour économiser la batterie sur Android
         if (timestamp - lastScanMsRef.current >= 130) {
           lastScanMsRef.current = timestamp;
           const v = videoRef.current;
@@ -195,7 +198,6 @@ export function QrScannerModal({
           if (v && v.readyState >= 2 && v.videoWidth > 0 && v.videoHeight > 0) {
             let decodedText: string | null = null;
 
-            // 1. Voie rapide native BarcodeDetector
             if (detectorRef.current) {
               try {
                 const hits = await detectorRef.current.detect(v);
@@ -206,7 +208,6 @@ export function QrScannerModal({
               }
             }
 
-            // 2. Fallback universel jsQR (iOS Safari, Firefox, Desktop)
             if (!decodedText && canvasRef.current) {
               const canvas = canvasRef.current;
               const targetWidth = Math.min(640, v.videoWidth);
@@ -261,7 +262,7 @@ export function QrScannerModal({
         );
       } else {
         setCameraError(
-          'Impossible de démarrer la caméra. Réessayez ou importez une photo du QR code du colis.'
+          'Impossible de démarrer la caméra. Réessayez ou importez une photo du QR code de la mission.'
         );
       }
     }
@@ -366,14 +367,14 @@ export function QrScannerModal({
       aria-labelledby="qr-scanner-title"
     >
       <div className="w-full h-full sm:h-auto sm:max-w-lg bg-[#141413] text-white sm:rounded-3xl overflow-hidden flex flex-col border border-white/10">
-        {/* Top Bar with contrast scrim */}
+        {/* Top Bar */}
         <div className="px-4 py-3.5 bg-[#141413] border-b border-white/10 flex items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="font-mono text-xs text-[#F4A61D] font-semibold tabular-nums truncate">
-              Colis attendu : {mission.orderNumber}
+              {mission.orderNumber} · {mission.missionId}
             </p>
             <h2 id="qr-scanner-title" className="text-base font-bold text-white truncate">
-              Scanner le QR code du colis
+              Validation rapide par QR code
             </h2>
           </div>
 
@@ -401,11 +402,9 @@ export function QrScannerModal({
           />
           <canvas ref={canvasRef} className="hidden" aria-hidden="true" />
 
-          {/* Viewfinder overlay when camera is active or starting */}
           {(cameraStatus === 'active' || cameraStatus === 'starting') && (
             <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center p-6">
               <div className="relative w-60 h-60 sm:w-64 sm:h-64">
-                {/* 4 high-contrast corner brackets */}
                 <span
                   className={`absolute top-0 left-0 w-9 h-9 border-t-4 border-l-4 rounded-tl-2xl ${frameBorderColor} transition-colors`}
                 />
@@ -419,7 +418,6 @@ export function QrScannerModal({
                   className={`absolute bottom-0 right-0 w-9 h-9 border-b-4 border-r-4 rounded-br-2xl ${frameBorderColor} transition-colors`}
                 />
 
-                {/* Subtle centered guide line */}
                 {cameraStatus === 'active' && !mismatchMessage && (
                   <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 h-0.5 bg-[#F4A61D]/80 shadow-[0_0_12px_rgba(244,166,29,0.75)]" />
                 )}
@@ -430,19 +428,18 @@ export function QrScannerModal({
                   {cameraStatus === 'starting'
                     ? 'Activation de la caméra arrière...'
                     : instantDeliveryOnMatch
-                    ? 'Placez le QR code du colis dans le cadre pour valider la livraison.'
-                    : 'Placez le QR code de l’étiquette JikJikoox dans le cadre.'}
+                    ? 'Cadrez le QR code du colis pour vérifier l’ID de mission et valider la livraison.'
+                    : 'Cadrez le QR code de l’étiquette JikJikoox pour vérifier la mission.'}
                 </p>
               </div>
             </div>
           )}
 
-          {/* Mismatch alert banner */}
           {mismatchMessage && cameraStatus !== 'matched' && (
             <div className="absolute inset-x-4 bottom-4 rounded-2xl bg-[#C6241B] text-white p-3.5 shadow-lg flex items-start gap-2.5">
               <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" aria-hidden="true" />
               <div className="min-w-0 flex-1 text-xs leading-relaxed">
-                <p className="font-bold">Mauvais colis détecté</p>
+                <p className="font-bold">ID de mission non concordant</p>
                 <p className="text-white/95 mt-0.5">{mismatchMessage}</p>
               </div>
               <button
@@ -458,7 +455,6 @@ export function QrScannerModal({
             </div>
           )}
 
-          {/* Camera Error State */}
           {cameraStatus === 'error' && (
             <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-[#141413]/95">
               <div className="w-14 h-14 rounded-2xl bg-[#FEF6E4]/15 text-[#F4A61D] flex items-center justify-center mb-3">
@@ -479,20 +475,19 @@ export function QrScannerModal({
             </div>
           )}
 
-          {/* Instant Match Success State */}
           {cameraStatus === 'matched' && matchedResult && (
             <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-[#0E6E2D]/95">
               <div className="w-16 h-16 rounded-2xl bg-white/20 text-white flex items-center justify-center mb-3">
                 <CheckCircle2 className="w-9 h-9" aria-hidden="true" />
               </div>
-              <p className="text-lg font-extrabold text-white">Colis validé</p>
+              <p className="text-lg font-extrabold text-white">Mission validée</p>
               <p className="font-mono text-sm font-semibold text-[#FEF6E4] mt-1 tabular-nums">
                 {matchedResult.displayRef}
               </p>
               <p className="text-xs text-white/90 mt-2">
                 {instantDeliveryOnMatch
                   ? 'Enregistrement instantané de la livraison...'
-                  : 'Référence vérifiée, retour au formulaire de remise...'}
+                  : 'Identifiant vérifié, retour au formulaire de remise...'}
               </p>
             </div>
           )}
@@ -559,7 +554,7 @@ export function QrScannerModal({
               className="w-full min-h-[46px] px-4 rounded-xl bg-[#0E6E2D] hover:bg-[#095220] text-white font-semibold text-sm inline-flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
             >
               <QrCode className="w-4 h-4" aria-hidden="true" />
-              <span>Simuler le scan QR du colis (Démo)</span>
+              <span>Simuler le scan QR de la mission (Démo)</span>
             </button>
           )}
         </div>
@@ -567,3 +562,5 @@ export function QrScannerModal({
     </div>
   );
 }
+
+export default QRCodeScanner;

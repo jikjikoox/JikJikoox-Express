@@ -94,4 +94,21 @@ test('Rejette un QR code vide et tronque les codes > 32 caractères', () => {
   }
 });
 
+test('Valide un ID de mission brut, préfixé MISSION: ou en chemin URL', () => {
+  const rawId = validateParcelQrForMission('msn_demo_01', sampleMission);
+  assert.equal(rawId.ok, true);
+  if (rawId.ok) assert.equal(rawId.matchedBy, 'missionId');
+
+  const prefixed = validateParcelQrForMission('MISSION:msn_demo_01', sampleMission);
+  assert.equal(prefixed.ok, true);
+  if (prefixed.ok) assert.equal(prefixed.matchedBy, 'missionId');
+
+  const urlPath = validateParcelQrForMission(
+    'https://livraison.jikjikoox.com/missions/msn_demo_01',
+    sampleMission
+  );
+  assert.equal(urlPath.ok, true);
+  if (urlPath.ok) assert.equal(urlPath.matchedBy, 'missionId');
+});
+
 console.log(`ALL ${passed} QR PARCEL VALIDATION TESTS PASSED`);
