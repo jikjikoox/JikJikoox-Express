@@ -246,9 +246,7 @@ const CONFIGURED_FUNCTIONS_BASE_URL = (
   ''
 ).trim();
 
-const IS_STAGING_BUILD =
-  metaEnv?.VITE_APP_ENV === 'staging' ||
-  metaEnv?.MODE === 'staging';
+const IS_STAGING_BUILD = metaEnv?.MODE === 'staging';
 
 const PRODUCTION_FUNCTIONS_BASE_URL =
   'https://dllafwvyfjodblxhshko.supabase.co/functions/v1';
