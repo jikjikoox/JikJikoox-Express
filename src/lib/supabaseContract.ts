@@ -251,13 +251,20 @@ const IS_STAGING_BUILD = metaEnv?.MODE === 'staging';
 const PRODUCTION_FUNCTIONS_BASE_URL =
   'https://dllafwvyfjodblxhshko.supabase.co/functions/v1';
 
-// Production bundles must not retain the isolated staging Supabase URL.
+const IS_PRODUCTION_HOST =
+  typeof window !== 'undefined' &&
+  window.location.hostname.toLowerCase() === 'livraison.jikjikoox.com';
+
+// The production domain always uses marketplace Supabase, even if Hostinger
+// accidentally builds it with staging environment variables or Vite mode.
 const FUNCTIONS_BASE_URL = (
-  IS_STAGING_BUILD
-    ? CONFIGURED_FUNCTIONS_BASE_URL
-    : CONFIGURED_FUNCTIONS_BASE_URL.includes('bwicndbbxvthbddiacks')
-      ? (metaEnv?.MODE === 'production' ? PRODUCTION_FUNCTIONS_BASE_URL : '')
-      : (CONFIGURED_FUNCTIONS_BASE_URL || (metaEnv?.MODE === 'production' ? PRODUCTION_FUNCTIONS_BASE_URL : ''))
+  IS_PRODUCTION_HOST
+    ? PRODUCTION_FUNCTIONS_BASE_URL
+    : IS_STAGING_BUILD
+      ? CONFIGURED_FUNCTIONS_BASE_URL
+      : CONFIGURED_FUNCTIONS_BASE_URL.includes('bwicndbbxvthbddiacks')
+        ? (metaEnv?.MODE === 'production' ? PRODUCTION_FUNCTIONS_BASE_URL : '')
+        : (CONFIGURED_FUNCTIONS_BASE_URL || (metaEnv?.MODE === 'production' ? PRODUCTION_FUNCTIONS_BASE_URL : ''))
 )
   .trim()
   .replace(/\/+$/, '');
