@@ -262,7 +262,7 @@ const FUNCTIONS_BASE_URL = (
       : (CONFIGURED_FUNCTIONS_BASE_URL || (metaEnv?.MODE === 'production' ? PRODUCTION_FUNCTIONS_BASE_URL : ''))
 )
   .trim()
-  .replace(/\\/+$/, '');
+  .replace(/\/+$/, '');
 
 export function getSupabaseFunctionsBaseUrl(): string {
   return FUNCTIONS_BASE_URL;
