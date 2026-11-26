@@ -240,13 +240,29 @@ export interface AdminDriverUpdateEdgeResponse {
 
 const metaEnv = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
 
-const FUNCTIONS_BASE_URL = (
+const CONFIGURED_FUNCTIONS_BASE_URL = (
   metaEnv?.VITE_SUPABASE_FUNCTIONS_URL ||
   metaEnv?.VITE_JIKJIKOOX_API_BASE_URL ||
   ''
+).trim();
+
+const IS_STAGING_BUILD =
+  metaEnv?.VITE_APP_ENV === 'staging' ||
+  metaEnv?.MODE === 'staging';
+
+const PRODUCTION_FUNCTIONS_BASE_URL =
+  'https://dllafwvyfjodblxhshko.supabase.co/functions/v1';
+
+// Production bundles must not retain the isolated staging Supabase URL.
+const FUNCTIONS_BASE_URL = (
+  IS_STAGING_BUILD
+    ? CONFIGURED_FUNCTIONS_BASE_URL
+    : CONFIGURED_FUNCTIONS_BASE_URL.includes('bwicndbbxvthbddiacks')
+      ? (metaEnv?.MODE === 'production' ? PRODUCTION_FUNCTIONS_BASE_URL : '')
+      : (CONFIGURED_FUNCTIONS_BASE_URL || (metaEnv?.MODE === 'production' ? PRODUCTION_FUNCTIONS_BASE_URL : ''))
 )
   .trim()
-  .replace(/\/+$/, '');
+  .replace(/\\/+$/, '');
 
 export function getSupabaseFunctionsBaseUrl(): string {
   return FUNCTIONS_BASE_URL;
