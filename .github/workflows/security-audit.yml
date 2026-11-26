@@ -21,7 +21,16 @@ jobs:
         with:
           fetch-depth: 0
       - name: Gitleaks scan
-        run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.28.0 detect --source=/repo --redact --exit-code 1
+        run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.28.0 detect --source=/repo --redact --report-format json --report-path=/repo/gitleaks-report.json --exit-code 1
+
+      - name: Upload redacted secret-scan report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitleaks-redacted-report
+          path: gitleaks-report.json
+          if-no-files-found: ignore
+          retention-days: 7
 
   build-check:
     name: Build and static checks
