@@ -42,6 +42,10 @@ jobs:
 
       - name: Security logic tests
         run: bun run test:security
+      - name: Supabase/Firebase integration logic tests
+        run: bun run test:supabase
+      - name: Isolated Edge Functions end-to-end harness
+        run: bun run test:staging:harness
 
       - name: Confirm patched gRPC version
         run: |
