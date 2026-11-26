@@ -1,7 +1,7 @@
 /**
  * Supabase Edge Function : driver-profile
- * - GET   : Récupère le profil officiel du livreur authentifié (crée une demande `pending`
- *           au premier passage si absent, jamais auto-activé).
+ * - GET   : Récupère le profil officiel existant du livreur authentifié.
+ * - POST  : Crée ou complète une demande de profil avec statut pending uniquement.
  * - PATCH : Met à jour uniquement les préférences opérationnelles autorisées d'un livreur `active`.
  */
 
@@ -32,33 +32,80 @@ export async function handleDriverProfileRequest(req: Request): Promise<Response
 
   try {
     const token = extractBearerToken(req.headers.get('authorization'));
-    const verified = await verifyFirebaseIdToken(token, { projectId: env.firebaseProjectId });
+    const verified = await verifyFirebaseIdToken(token, {
+      projectId: env.firebaseProjectId,
+      requireVerifiedEmail: req.method !== 'POST',
+    });
 
     let driver = await fetchDriverByFirebaseUid(env, verified.uid);
 
-    if (req.method === 'GET') {
-      if (!driver) {
-        // Premier passage : enregistrement strictement en statut 'pending' (validation Admin requise)
-        const parts = (verified.name || verified.email.split('@')[0] || 'Livreur').trim().split(/\s+/);
+    if (req.method === 'POST') {
+      const raw = (await req.json().catch(() => null)) as Record<string, unknown> | null;
+      const firstName = typeof raw?.firstName === 'string' ? raw.firstName.trim() : '';
+      const lastName = typeof raw?.lastName === 'string' ? raw.lastName.trim() : '';
+      const phone = typeof raw?.phone === 'string' ? raw.phone.trim() : '';
+      const vehicleType = typeof raw?.vehicleType === 'string' ? raw.vehicleType : 'scooter';
+      const workZone = typeof raw?.workZone === 'string' ? raw.workZone.trim() : 'Dakar';
+      if (
+        !raw || firstName.length < 2 || firstName.length > 60 ||
+        lastName.length < 2 || lastName.length > 60 ||
+        phone.length < 8 || phone.length > 24 ||
+        !/^\\+?[0-9][0-9 .()-]{6,22}$/.test(phone) ||
+        !ALLOWED_VEHICLES.has(vehicleType) || workZone.length < 2 || workZone.length > 80
+      ) {
+        return errorResponse('INVALID_REGISTRATION', 'Vérifiez les informations de votre inscription.', 400, cors);
+      }
+
+      const registration = {
+        first_name: firstName,
+        last_name: lastName,
+        phone,
+        vehicle_type: vehicleType,
+        work_zone: workZone,
+        email: verified.email.slice(0, 160),
+        photo_url: verified.picture?.startsWith('https://') ? verified.picture.slice(0, 500) : null,
+        role: 'courier',
+        account_status: 'pending',
+        is_available: false,
+      };
+
+      if (driver) {
+        if (driver.email.toLowerCase() !== verified.email.toLowerCase() || driver.account_status !== 'pending') {
+          return errorResponse('REGISTRATION_ALREADY_EXISTS', 'Ce compte livreur est déjà enregistré ou son statut ne permet pas cette modification.', 409, cors);
+        }
+        const updated = await supabaseRest<DriverRecord[]>(env,
+          `/rest/v1/express_drivers?firebase_uid=eq.${encodeURIComponent(verified.uid)}&account_status=eq.pending`,
+          { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(registration) }
+        );
+        if (!updated.ok || !updated.data?.[0]) {
+          return errorResponse('PROFILE_REGISTRATION_FAILED', 'Impossible de compléter votre profil livreur.', 500, cors);
+        }
+        driver = updated.data[0];
+      } else {
         const created = await supabaseRest<DriverRecord[]>(env, '/rest/v1/express_drivers', {
           method: 'POST',
           headers: { Prefer: 'return=representation' },
           body: JSON.stringify({
             firebase_uid: verified.uid,
-            email: verified.email.slice(0, 160),
-            first_name: (parts[0] || 'Livreur').slice(0, 60),
-            last_name: (parts.slice(1).join(' ') || 'JikJikoox').slice(0, 60),
-            phone: '+221 77 000 00 00',
-            photo_url: verified.picture?.startsWith('https://') ? verified.picture.slice(0, 500) : null,
-            role: 'courier',
-            account_status: 'pending',
-            is_available: false,
+            ...registration,
           }),
         });
         if (!created.ok || !created.data?.[0]) {
-          return errorResponse('PROFILE_INIT_FAILED', 'Impossible d’initialiser votre profil.', 500, cors);
+          return errorResponse('PROFILE_REGISTRATION_FAILED', 'Impossible de créer votre profil livreur.', 500, cors);
         }
         driver = created.data[0];
+      }
+      return jsonResponse({ ok: true, profile: driver }, 201, cors);
+    }
+
+    if (req.method === 'GET') {
+      if (!driver) {
+        return errorResponse(
+          'DRIVER_NOT_REGISTERED',
+          'Aucun profil livreur n’est associé à ce compte. Utilisez le formulaire d’inscription ou contactez JikJikoox Admin.',
+          404,
+          cors
+        );
       }
 
       return jsonResponse({ ok: true, profile: driver }, 200, cors);

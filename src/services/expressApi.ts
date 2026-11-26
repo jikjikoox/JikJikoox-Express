@@ -198,6 +198,23 @@ export function createExpressApiClient(options: ExpressApiOptions = {}) {
       });
     },
 
+    registerDriver(
+      idToken: string,
+      registration: {
+        firstName: string;
+        lastName: string;
+        phone: string;
+        vehicleType: VehicleType;
+        workZone: string;
+      }
+    ) {
+      return request<DriverProfileEdgeResponse>('driver-profile', idToken, {
+        method: 'POST',
+        body: registration,
+        retryable: false,
+      });
+    },
+
     updateDriverProfile(
       idToken: string,
       updates: {

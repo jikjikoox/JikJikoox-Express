@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import { Clock, LogOut, ShieldAlert, Truck } from 'lucide-react';
 import { BrandAccentBar, BrandLogo } from './components/BrandLogo';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { PwaInstallPrompt } from './components/PwaInstallPrompt';
 import { CourierAppProvider, useCourierApp } from './context/CourierAppContext';
 import type { AppTab } from './types/delivery';
 
@@ -109,8 +110,7 @@ function CourierExpressRouter() {
                 Compte en attente d’autorisation
               </h1>
               <p className="text-sm text-[#5A5851] leading-relaxed">
-                Votre identité Google est vérifiée, mais l’accès aux missions réelles JikJikoox doit
-                d’abord être approuvé par un administrateur.
+                Votre compte est authentifié, mais l’accès aux missions réelles JikJikoox doit d’abord être approuvé par un administrateur. Si vous venez de vous inscrire, confirmez votre adresse e-mail puis reconnectez-vous.
               </p>
             </div>
 
@@ -259,6 +259,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       <CourierAppProvider>
+        <PwaInstallPrompt />
         <CourierExpressRouter />
       </CourierAppProvider>
     </ErrorBoundary>

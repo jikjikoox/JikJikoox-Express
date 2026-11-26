@@ -72,3 +72,36 @@ self.addEventListener('notificationclick', (event) => {
     })
   );
 });
+
+
+// App-shell cache for the installable JikJikoox Express PWA.
+// This is deliberately the same root-scope worker used by Firebase Messaging.
+const EXPRESS_CACHE = 'jikjikoox-express-shell-v1';
+self.addEventListener('fetch', (event) => {
+  const request = event.request;
+  const url = new URL(request.url);
+  if (request.method !== 'GET' || url.origin !== self.location.origin) return;
+  if (url.pathname.startsWith('/functions/') || url.pathname.startsWith('/rest/')) return;
+
+  if (request.mode === 'navigate') {
+    event.respondWith(fetch(request).then((response) => {
+      if (response.ok) {
+        const copy = response.clone();
+        caches.open(EXPRESS_CACHE).then((cache) => cache.put('/', copy));
+      }
+      return response;
+    }).catch(async () => (await caches.match(request)) || (await caches.match('/'))));
+    return;
+  }
+
+  event.respondWith(caches.match(request).then((cached) => {
+    const network = fetch(request).then((response) => {
+      if (response.ok && response.type === 'basic') {
+        const copy = response.clone();
+        caches.open(EXPRESS_CACHE).then((cache) => cache.put(request, copy));
+      }
+      return response;
+    });
+    return cached || network;
+  }));
+});
