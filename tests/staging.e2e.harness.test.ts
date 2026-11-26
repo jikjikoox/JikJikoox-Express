@@ -17,6 +17,8 @@ import {
   isSignedUrlExpired,
 } from '../supabase/functions/delivery-proof/index.ts';
 import { handleDriverNotificationsRequest } from '../supabase/functions/driver-notifications/index.ts';
+import { handleDriverLocationRequest } from '../supabase/functions/driver-location/index.ts';
+import { handleAdminDriverLocationsRequest } from '../supabase/functions/admin-driver-locations/index.ts';
 import { handleSyncAssignmentRequest } from '../supabase/functions/sync-assignment-to-firestore/index.ts';
 import {
   BACKEND_TRANSITION_GRAPH,
@@ -186,6 +188,11 @@ async function setupIsolatedStagingEnvironment() {
         },
       ],
     ]),
+    admins: new Map<string, Record<string, unknown>>([
+      ['uid_staging_admin', { firebase_uid: 'uid_staging_admin', email: 'admin.staging@jikjikoox.test', display_name: 'Admin QA', is_active: true }],
+    ]),
+    driverLocations: [] as Array<Record<string, unknown>>,
+    lastLocations: new Map<string, Record<string, unknown>>(),
     deliveries: new Map<string, Record<string, unknown>>([
       [
         'dlv-stg-0001',
@@ -380,12 +387,20 @@ async function setupIsolatedStagingEnvironment() {
       const parsedUrl = new URL(urlStr);
       const tablePath = parsedUrl.pathname.replace('/rest/v1/', '');
 
+      if (tablePath === 'express_admins' && method === 'GET') {
+        const uidFilter = parsedUrl.searchParams.get('firebase_uid')?.replace(/^eq\./, '');
+        const activeFilter = parsedUrl.searchParams.get('is_active')?.replace(/^eq\./, '');
+        const rows = [...state.admins.values()].filter((a) => (!uidFilter || a.firebase_uid === uidFilter) && (!activeFilter || String(a.is_active) === activeFilter));
+        return new Response(JSON.stringify(rows), { status: 200 });
+      }
+
       if (tablePath === 'express_drivers') {
         if (method === 'GET') {
           const uidFilter = parsedUrl.searchParams.get('firebase_uid')?.replace(/^eq\./, '');
           const idFilter = parsedUrl.searchParams.get('id')?.replace(/^eq\./, '');
+          const statusFilter = parsedUrl.searchParams.get('account_status')?.replace(/^eq\./, '');
           const rows = [...state.drivers.values()].filter(
-            (d) => (!uidFilter || d.firebase_uid === uidFilter) && (!idFilter || d.id === idFilter)
+            (d) => (!uidFilter || d.firebase_uid === uidFilter) && (!idFilter || d.id === idFilter) && (!statusFilter || d.account_status === statusFilter)
           );
           return new Response(JSON.stringify(rows), { status: 200 });
         }
@@ -414,6 +429,34 @@ async function setupIsolatedStagingEnvironment() {
           const updated = { ...existing, ...(JSON.parse(rawBody) as Record<string, unknown>) };
           state.drivers.set(idFilter, updated);
           return new Response(JSON.stringify([updated]), { status: 200 });
+        }
+      }
+
+      if (tablePath === 'express_driver_locations') {
+        if (method === 'GET') {
+          const keyFilter = parsedUrl.searchParams.get('idempotency_key')?.replace(/^eq\./, '');
+          const driverFilter = parsedUrl.searchParams.get('driver_id')?.replace(/^eq\./, '');
+          const rows = state.driverLocations.filter((loc) => (!keyFilter || loc.idempotency_key === keyFilter) && (!driverFilter || loc.driver_id === driverFilter));
+          return new Response(JSON.stringify(rows), { status: 200 });
+        }
+        if (method === 'POST') {
+          const body = JSON.parse(rawBody) as Record<string, unknown>;
+          const row = { id: `gps-stg-${state.driverLocations.length + 1}`, recorded_at: body.recorded_at, ...body };
+          state.driverLocations.push(row);
+          return new Response(JSON.stringify([row]), { status: 201 });
+        }
+      }
+
+      if (tablePath === 'express_driver_last_locations') {
+        if (method === 'GET') {
+          const driverFilter = parsedUrl.searchParams.get('driver_id')?.replace(/^eq\./, '');
+          const rows = [...state.lastLocations.values()].filter((loc) => !driverFilter || loc.driver_id === driverFilter);
+          return new Response(JSON.stringify(rows), { status: 200 });
+        }
+        if (method === 'POST') {
+          const body = JSON.parse(rawBody) as Record<string, unknown>;
+          state.lastLocations.set(String(body.driver_id), body);
+          return new Response(JSON.stringify([body]), { status: 201 });
         }
       }
 
@@ -577,6 +620,7 @@ async function main() {
   try {
     const tokenA = await env.issueToken('uid_staging_driver_a', 'driver.a.staging@jikjikoox.test');
     const tokenB = await env.issueToken('uid_staging_driver_b', 'driver.b.staging@jikjikoox.test');
+    const tokenAdmin = await env.issueToken('uid_staging_admin', 'admin.staging@jikjikoox.test');
     const tokenSuspended = await env.issueToken(
       'uid_staging_suspended',
       'suspended.staging@jikjikoox.test'
@@ -646,6 +690,18 @@ async function main() {
         })
       );
       assert.equal(badRes.status, 401);
+    });
+
+    await check('Test GPS & Admin — Auth', 'E12', 'GPS et carte de flotte refusent les appels sans token Firebase (401)', async () => {
+      const gps = await handleDriverLocationRequest(new Request('https://stg/driver-location', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deliveryId: 'dlv-stg-0001', latitude: 14.7, longitude: -17.4 }) }));
+      assert.equal(gps.status, 401);
+      const map = await handleAdminDriverLocationsRequest(new Request('https://stg/admin-driver-locations'));
+      assert.equal(map.status, 401);
+    });
+
+    await check('Test GPS & Admin — Auth', 'E13', 'Un livreur authentifié mais non-admin est refusé sur la carte de flotte (403)', async () => {
+      const res = await handleAdminDriverLocationsRequest(new Request('https://stg/admin-driver-locations', { headers: { Authorization: `Bearer ${tokenA}` } }));
+      assert.equal(res.status, 403);
     });
 
     // =========================================================================
@@ -783,6 +839,37 @@ async function main() {
         assert.equal(sbRow.status, nextStatus);
         assert.equal(fsDoc.status.stringValue, nextStatus);
       }
+    });
+
+    await check('Test GPS — Mission active', 'E14', 'Livreur A envoie une position GPS valide; historique et dernière position sont enregistrés', async () => {
+      const gpsRes = await handleDriverLocationRequest(new Request('https://stg/driver-location', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${tokenA}`, 'Content-Type': 'application/json', 'X-Idempotency-Key': 'gps-stg-unique-001' },
+        body: JSON.stringify({ deliveryId: 'dlv-stg-0001', latitude: 14.7456, longitude: -17.5142, accuracyMeters: 8, speedMps: 2.4, heading: 91, recordedAtIso: new Date().toISOString() }),
+      }));
+      assert.equal(gpsRes.status, 201);
+      assert.equal(env.state.driverLocations.length, 1);
+      assert.equal(env.state.lastLocations.get('drv-stg-001')?.latitude, 14.7456);
+    });
+
+    await check('Test GPS — Isolation', 'E15', 'Livreur A ne peut envoyer une position sur la mission du Livreur B (403)', async () => {
+      const res = await handleDriverLocationRequest(new Request('https://stg/driver-location', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${tokenA}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deliveryId: 'dlv-stg-0002', latitude: 14.7, longitude: -17.4 }),
+      }));
+      assert.equal(res.status, 403);
+    });
+
+    await check('Test Admin — Carte de flotte', 'E16', 'Admin staging authentifié voit la position GPS enregistrée; endpoint renvoie 200', async () => {
+      const res = await handleAdminDriverLocationsRequest(new Request('https://stg/admin-driver-locations', { headers: { Authorization: `Bearer ${tokenAdmin}` } }));
+      assert.equal(res.status, 200);
+      const body = (await res.json()) as { ok: boolean; activeCount: number; drivers: Array<{ driverId: string; lat: number; lng: number }> };
+      assert.equal(body.ok, true);
+      assert.equal(body.activeCount, 1);
+      assert.equal(body.drivers[0].driverId, 'drv-stg-001');
+      assert.equal(body.drivers[0].lat, 14.7456);
+      assert.equal(body.drivers[0].lng, -17.5142);
     });
 
     await check('Test 6 — Preuve', 'E10', 'Upload preuve autorisé à ARRIVED (MIME/taille validés, chemin confiné, URL signée TTL 120s) et refusé à Livreur B', async () => {
