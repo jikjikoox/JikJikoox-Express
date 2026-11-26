@@ -7,15 +7,15 @@ useDefault = true
 description = "Firebase browser API key in public app configuration (restrict in Google Cloud)"
 condition = "AND"
 paths = ['''(^|/)firebase-applet-config\.json$''']
-regexTarget = "line"
-regexes = ['''"apiKey"\s*:\s*"AIza''']
+regexTarget = "secret"
+regexes = ['''^AIza''']
 
 [[allowlists]]
 description = "Firebase browser API key in staging example config"
 condition = "AND"
 paths = ['''(^|/)\.env\.staging\.example$''']
-regexTarget = "line"
-regexes = ['''VITE_FIREBASE_API_KEY\s*=\s*AIza''']
+regexTarget = "secret"
+regexes = ['''^AIza''']
 
 [[allowlists]]
 description = "Private key is generated in-memory for tests; no key material committed"
@@ -28,5 +28,5 @@ regexes = ['''privateKeyPem\s*=\s*''']
 description = "Synthetic delivery idempotency test fixture"
 condition = "AND"
 paths = ['''(^|/)tests/staging\.e2e\.harness\.test\.ts$''']
-regexTarget = "line"
-regexes = ['''deliverKey\s*=\s*"stg-deliver-idempotent-001"''']
+regexTarget = "secret"
+regexes = ['''^stg-deliver-idempotent-001$''']
