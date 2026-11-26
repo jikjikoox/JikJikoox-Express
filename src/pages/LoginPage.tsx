@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   AlertCircle,
   ArrowRight,
+  CheckCircle2,
   ChevronDown,
   ChevronUp,
   HelpCircle,
@@ -11,6 +12,42 @@ import {
 import { BrandAccentBar, BrandLogo } from '../components/BrandLogo';
 import { useCourierApp } from '../context/CourierAppContext';
 import { LOGIN_HERO_IMAGE } from '../lib/mediaAssets';
+
+const KEY_FEATURES: { title: string; description: string }[] = [
+  {
+    title: 'Gestion des missions :',
+    description:
+      'réception et consultation des commandes qui vous sont affectées à Dakar et dans les zones de livraison couvertes.',
+  },
+  {
+    title: 'Suivi des livraisons :',
+    description:
+      'mise à jour des étapes de prise en charge, de collecte, d’acheminement et de remise au client.',
+  },
+  {
+    title: 'Géolocalisation GPS :',
+    description:
+      'partage de votre position pendant les opérations de livraison, selon les autorisations accordées.',
+  },
+  {
+    title: 'Gestion des paiements :',
+    description:
+      'suivi des montants à encaisser à la livraison (paiement à la réception / COD), en FCFA.',
+  },
+  {
+    title: 'Preuves de livraison :',
+    description: 'confirmation sécurisée de la remise de la commande.',
+  },
+  {
+    title: 'Notifications en temps réel :',
+    description: 'alertes concernant les nouvelles missions et les changements opérationnels.',
+  },
+  {
+    title: 'Tableau de bord :',
+    description:
+      'consultation de vos livraisons, de vos performances et de vos activités hebdomadaires.',
+  },
+];
 
 export function LoginPage() {
   const { signInWithGoogle, enterDemoMode, authError } = useCourierApp();
@@ -30,38 +67,69 @@ export function LoginPage() {
   return (
     <div className="min-h-screen bg-white flex flex-col lg:grid lg:grid-cols-2">
       {/* Left / Top Editorial Visual Panel */}
-      <div className="relative h-56 sm:h-72 lg:h-auto lg:min-h-screen overflow-hidden bg-[#141413]">
+      <div className="relative overflow-hidden bg-[#141413] flex flex-col lg:min-h-screen">
         {!heroError ? (
           <img
             src={LOGIN_HERO_IMAGE}
             alt="Scooter de livraison JikJikoox Express sur une avenue ensoleillée de Dakar"
             referrerPolicy="no-referrer"
             onError={() => setHeroError(true)}
-            className="w-full h-full object-cover"
+            className="absolute inset-0 w-full h-full object-cover"
           />
         ) : (
-          <div className="w-full h-full bg-gradient-to-br from-[#0E6E2D] via-[#141413] to-[#652214]" />
+          <div className="absolute inset-0 w-full h-full bg-gradient-to-br from-[#0E6E2D] via-[#141413] to-[#652214]" />
         )}
 
-        {/* Measured contrast scrim for WCAG AA readability */}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#141413]/88 via-[#141413]/38 to-[#141413]/18" />
+        {/* Measured contrast scrim for WCAG AA readability across all viewports */}
+        <div className="absolute inset-0 bg-gradient-to-b from-[#141413]/72 via-[#141413]/84 to-[#141413]/95" />
 
         {/* Signature JikJikoox leaf palette identity bar */}
-        <BrandAccentBar className="absolute top-0 left-0 right-0 z-10" />
+        <BrandAccentBar className="relative z-10 shrink-0" />
 
-        <div className="absolute inset-0 p-6 sm:p-10 lg:p-12 flex flex-col justify-between text-white">
+        <div className="relative z-10 flex-1 px-5 py-6 sm:px-10 sm:py-9 lg:px-12 lg:py-10 flex flex-col justify-between gap-6 text-white">
           <BrandLogo size="md" showWordmark inverted />
 
-          <div className="max-w-md">
-            <p className="text-xs font-semibold text-[#F4A61D] mb-2">
-              Réseau livraison · Dakar & Sénégal
-            </p>
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold leading-tight tracking-tight">
-              Vos missions locales, claires et maîtrisées sur le terrain.
-            </h1>
-            <p className="hidden sm:block text-sm text-white/85 mt-3 leading-relaxed">
-              Recevez vos affectations JikJikoox, suivez les encaissements à la réception et
-              transmettez vos preuves de livraison depuis votre téléphone.
+          <div className="max-w-xl space-y-5">
+            <div className="space-y-2.5">
+              <h1 className="text-2xl sm:text-3xl lg:text-[2rem] font-extrabold leading-tight tracking-tight text-white">
+                JikJikoox Express — Espace Livreur
+              </h1>
+              <p className="text-sm sm:text-base font-bold text-[#F4A61D] leading-snug">
+                L’application professionnelle de livraison et de suivi des commandes JikJikoox au
+                Sénégal.
+              </p>
+              <p className="text-sm text-white/90 leading-relaxed">
+                Bienvenue dans votre espace de travail dédié à la gestion de vos livraisons.
+                Consultez vos missions, organisez vos déplacements et suivez vos performances
+                depuis une interface simple et sécurisée.
+              </p>
+            </div>
+
+            <section aria-labelledby="key-features-heading" className="pt-4 border-t border-white/15 space-y-3">
+              <h2
+                id="key-features-heading"
+                className="text-xs font-bold uppercase tracking-wider text-[#F4A61D]"
+              >
+                Fonctionnalités clés
+              </h2>
+              <ul className="space-y-2 text-[13px] sm:text-sm text-white/90 leading-snug">
+                {KEY_FEATURES.map((feature) => (
+                  <li key={feature.title} className="flex items-start gap-2.5">
+                    <CheckCircle2
+                      className="w-4 h-4 text-[#4ADE80] shrink-0 mt-0.5"
+                      aria-hidden="true"
+                    />
+                    <span>
+                      <strong className="font-semibold text-white">{feature.title}</strong>{' '}
+                      {feature.description}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+
+            <p className="pt-3 border-t border-white/15 text-sm font-bold text-white leading-snug">
+              JikJikoox Express — Chaque commande, une livraison suivie et maîtrisée.
             </p>
           </div>
         </div>
