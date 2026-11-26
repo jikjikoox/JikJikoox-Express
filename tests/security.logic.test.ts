@@ -108,7 +108,7 @@ runCheck('S08', 'Firebase Storage : uploads de preuve bloqués côté client; up
   assert.match(contextSource, /uploadPhotoToSignedUrl/);
 });
 
-// 9. Workflow state machine: valid path allowed, shortcuts & terminal mutations blocked// 9. Workflow state machine: valid path allowed, shortcuts & terminal mutations blocked
+// 9. Workflow state machine: valid path allowed, shortcuts & terminal mutations blocked
 runCheck('S09', 'Machine à états : transitions valides acceptées, sauts et états terminaux refusés', () => {
   assert.equal(isTransitionAllowed('ASSIGNED', 'ACCEPTED'), true);
   assert.equal(isTransitionAllowed('ACCEPTED', 'PICKED_UP'), true);
