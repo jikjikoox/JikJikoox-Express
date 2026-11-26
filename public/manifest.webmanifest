@@ -1,0 +1,21 @@
+{
+  "id": "/",
+  "name": "JikJikoox Express",
+  "short_name": "JikJikoox",
+  "description": "Application professionnelle de livraison et de suivi des commandes JikJikoox au Sénégal.",
+  "lang": "fr-SN",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#F7F6F2",
+  "theme_color": "#0E6E2D",
+  "icons": [
+    {
+      "src": "/pwa-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
