@@ -1,0 +1,87 @@
+name: Express build and runtime validation
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches:
+      - main
+      - "fix/**"
+      - "feature/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: express-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test-smoke:
+    name: Build, tests and production-server smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.12.0"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install locked dependencies
+        run: bun install --frozen-lockfile
+
+      - name: TypeScript typecheck
+        run: bun run lint
+
+      - name: ESLint Firestore rules
+        run: bun run lint:rules
+
+      - name: Build production frontend
+        run: bun run build
+
+      - name: Security logic tests
+        run: bun run test:security
+
+      - name: Staging end-to-end contract tests
+        run: bun run test:staging:harness
+
+      - name: Supabase integration contract tests
+        run: bun run test:supabase
+
+      - name: Express production server smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s dist/index.html
+          bun run start > /tmp/jikjikoox-express-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+
+          ready=0
+          for attempt in $(seq 1 30); do
+            if curl --silent --show-error --fail http://127.0.0.1:3000/healthz > /tmp/express-health.json; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+
+          if [ "$ready" -ne 1 ]; then
+            cat /tmp/jikjikoox-express-server.log
+            echo "Express server did not become healthy."
+            exit 1
+          fi
+
+          grep -q '"ok":true' /tmp/express-health.json
+          grep -q '"distReady":true' /tmp/express-health.json
+          curl --silent --show-error --fail http://127.0.0.1:3000/ > /tmp/express-home.html
+          grep -q 'type="module"' /tmp/express-home.html
+          grep -q 'assets/' /tmp/express-home.html
+          echo "Health endpoint and built React entry point are available."
