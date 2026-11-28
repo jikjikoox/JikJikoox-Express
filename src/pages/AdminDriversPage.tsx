@@ -146,7 +146,7 @@ export function AdminDriversPage() {
   const trustRequest = async (driverId: string, body?: Record<string, unknown>) => {
     if (!firebaseUser) throw new Error('Session administrateur absente.');
     const token = await firebaseUser.getIdToken();
-    const base = getSupabaseFunctionsBaseUrl().replace(/\\/+$/, '');
+    const base = getSupabaseFunctionsBaseUrl().replace(/\/+$/, '');
     const response = await fetch(
       body
         ? `${base}/courier-trust`
