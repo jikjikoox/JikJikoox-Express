@@ -19,6 +19,7 @@ import {
 import { handleDriverNotificationsRequest } from '../supabase/functions/driver-notifications/index.ts';
 import { handleDriverLocationRequest } from '../supabase/functions/driver-location/index.ts';
 import { handleAdminDriverLocationsRequest } from '../supabase/functions/admin-driver-locations/index.ts';
+import { handleExpressAdminProfileRequest } from '../supabase/functions/express-admin-profile/index.ts';
 import { handleSyncAssignmentRequest } from '../supabase/functions/sync-assignment-to-firestore/index.ts';
 import {
   BACKEND_TRANSITION_GRAPH,
@@ -189,7 +190,21 @@ async function setupIsolatedStagingEnvironment() {
       ],
     ]),
     admins: new Map<string, Record<string, unknown>>([
-      ['uid_staging_admin', { firebase_uid: 'uid_staging_admin', email: 'admin.staging@jikjikoox.test', display_name: 'Admin QA', is_active: true }],
+      ['uid_staging_admin', {
+        firebase_uid: 'uid_staging_admin',
+        email: 'admin.staging@jikjikoox.test',
+        display_name: 'Admin QA',
+        is_active: true,
+        supabase_user_id: 'user_staging_admin',
+      }],
+    ]),
+    profiles: new Map<string, Record<string, unknown>>([
+      ['user_staging_admin', {
+        user_id: 'user_staging_admin',
+        role: 'admin',
+        is_active: true,
+        email: 'admin.staging@jikjikoox.test',
+      }],
     ]),
     driverLocations: [] as Array<Record<string, unknown>>,
     lastLocations: new Map<string, Record<string, unknown>>(),
@@ -391,6 +406,13 @@ async function setupIsolatedStagingEnvironment() {
         const uidFilter = parsedUrl.searchParams.get('firebase_uid')?.replace(/^eq\./, '');
         const activeFilter = parsedUrl.searchParams.get('is_active')?.replace(/^eq\./, '');
         const rows = [...state.admins.values()].filter((a) => (!uidFilter || a.firebase_uid === uidFilter) && (!activeFilter || String(a.is_active) === activeFilter));
+        return new Response(JSON.stringify(rows), { status: 200 });
+      }
+
+      if (tablePath === 'profiles' && method === 'GET') {
+        const userIdFilter = parsedUrl.searchParams.get('user_id')?.replace(/^eq\\./, '');
+        const activeFilter = parsedUrl.searchParams.get('is_active')?.replace(/^eq\\./, '');
+        const rows = [...state.profiles.values()].filter((p) => (!userIdFilter || p.user_id === userIdFilter) && (!activeFilter || String(p.is_active) === activeFilter));
         return new Response(JSON.stringify(rows), { status: 200 });
       }
 
@@ -860,6 +882,18 @@ async function main() {
         body: JSON.stringify({ deliveryId: 'dlv-stg-0002', latitude: 14.7, longitude: -17.4 }),
       }));
       assert.equal(res.status, 403);
+    });
+
+    await check('Test Admin — Identité et rôle Supabase', 'E17', 'Admin Firebase lié à un profil Supabase actif reçoit son rôle exact', async () => {
+      const res = await handleExpressAdminProfileRequest(new Request('https://stg/express-admin-profile', {
+        headers: { Authorization: `Bearer ${tokenAdmin}` },
+      }));
+      assert.equal(res.status, 200);
+      const body = (await res.json()) as { ok: boolean; isAdmin: boolean; role: string; email: string };
+      assert.equal(body.ok, true);
+      assert.equal(body.isAdmin, true);
+      assert.equal(body.role, 'admin');
+      assert.equal(body.email, 'admin.staging@jikjikoox.test');
     });
 
     await check('Test Admin — Carte de flotte', 'E16', 'Admin staging authentifié voit la position GPS enregistrée; endpoint renvoie 200', async () => {
