@@ -2,7 +2,7 @@ import { buildCorsHeaders, jsonResponse, errorResponse } from '../_shared/corsAn
 import { extractBearerToken, verifyFirebaseIdToken } from '../_shared/firebaseAuth.ts';
 import { readDenoEnv, supabaseRest, fetchDriverByFirebaseUid, assertAuthorizedActiveDriver } from '../_shared/supabaseAdmin.ts';
 const EXPENSE_CATEGORIES = ['fuel','oil_change','maintenance','cleaning','food','telecom','other'];
-Deno.serve(async (req:Request) => {
+export async function handleDriverFinance(req:Request):Promise<Response> {
  const env=readDenoEnv(); const cors=buildCorsHeaders(req.headers.get('origin'),env.allowedOrigins);
  if(req.method==='OPTIONS') return new Response('ok',{headers:cors});
  try {
@@ -42,4 +42,6 @@ Deno.serve(async (req:Request) => {
   }
   return errorResponse('METHOD_NOT_ALLOWED','Méthode non autorisée.',405,cors);
  } catch(e) { const message=e instanceof Error?e.message:'UNKNOWN'; const status=message.includes('TOKEN')||message.includes('EMAIL')?401:message.includes('DRIVER_')||message.includes('ADMIN_')?403:500; return errorResponse('FINANCE_ERROR',status===500?'Une erreur est survenue dans le module financier.':message,status,cors); }
-});
+}
+const denoRuntime=(globalThis as unknown as {Deno?:{serve(fn:(r:Request)=>Promise<Response>):void}}).Deno;
+if(denoRuntime?.serve)denoRuntime.serve(handleDriverFinance);
