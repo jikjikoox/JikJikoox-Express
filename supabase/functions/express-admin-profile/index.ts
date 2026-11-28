@@ -23,7 +23,7 @@ export async function handleExpressAdminProfileRequest(req: Request): Promise<Re
       requireVerifiedEmail: true,
     });
     const admin = assertAuthorizedAdmin(
-      await fetchActiveAdminByFirebaseUid(env, verified.uid)
+      await fetchActiveAdminByFirebaseUid(env, verified.uid, verified.email)
     );
     if (admin.email.toLowerCase() !== verified.email.toLowerCase()) {
       return errorResponse('ADMIN_IDENTITY_MISMATCH', 'Identité administrateur non concordante.', 403, cors);
