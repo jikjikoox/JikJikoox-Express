@@ -10,6 +10,7 @@ import {
   Power,
   User as UserIcon,
   Users,
+  Wallet,
   X,
 } from 'lucide-react';
 import { useCourierApp } from '../context/CourierAppContext';
@@ -31,6 +32,7 @@ const BASE_NAV_ITEMS: { id: AppTab; label: string; icon: React.ComponentType<{ c
   { id: 'history', label: 'Historique', icon: History },
   { id: 'notifications', label: 'Alertes', icon: Bell },
   { id: 'profile', label: 'Profil', icon: UserIcon },
+  { id: 'finance', label: 'Finances', icon: Wallet },
 ];
 
 export function AppShell({
@@ -342,7 +344,7 @@ export function AppShell({
         aria-label="Navigation mobile"
         className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-[#E5E2D9] pb-safe"
       >
-        <div className="grid grid-cols-5 h-[60px] items-center">
+        <div className="grid grid-cols-6 h-[60px] items-center">
           {mobileNavItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
