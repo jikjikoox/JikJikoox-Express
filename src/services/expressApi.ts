@@ -280,7 +280,7 @@ export function createExpressApiClient(options: ExpressApiOptions = {}) {
       );
     },
 
-    fetchDriverMetrics(idToken: string) {
+    fetchDriverFinance(idToken: string) {\n      return request<any>('driver-finance', idToken, { method: 'GET', retryable: true });\n    },\n\n    submitDriverExpense(idToken: string, payload: { amount: number; category: string; description: string; idempotencyKey: string }) {\n      return request<any>('driver-finance', idToken, { method: 'POST', body: { action: 'submit-expense', ...payload }, idempotencyKey: payload.idempotencyKey, retryable: false });\n    },\n\n    fetchDriverMetrics(idToken: string) {
       return request<{
         ok: true;
         generatedAt: string;
