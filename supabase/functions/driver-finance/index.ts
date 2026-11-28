@@ -7,7 +7,9 @@ Deno.serve(async (req:Request) => {
  if(req.method==='OPTIONS') return new Response('ok',{headers:cors});
  try {
   const token=extractBearerToken(req.headers.get('authorization')); const user=await verifyFirebaseIdToken(token,{projectId:env.firebaseProjectId});
-  const driver=await fetchDriverByFirebaseUid(env,user.uid);\n  const adminLookup=await supabaseRest<any[]>(env,'/rest/v1/express_admins?firebase_uid=eq.'+encodeURIComponent(user.uid)+'&is_active=eq.true&select=firebase_uid,email,is_active&limit=1');\n  const admin=adminLookup.ok&&adminLookup.data?.length===1&&String(adminLookup.data[0].email||'').toLowerCase()===user.email.toLowerCase()?adminLookup.data[0]:null;
+  const driver=await fetchDriverByFirebaseUid(env,user.uid);
+  const adminLookup=await supabaseRest<any[]>(env,'/rest/v1/express_admins?firebase_uid=eq.'+encodeURIComponent(user.uid)+'&is_active=eq.true&select=firebase_uid,email,is_active&limit=1');
+  const admin=adminLookup.ok&&adminLookup.data?.length===1&&String(adminLookup.data[0].email||'').toLowerCase()===user.email.toLowerCase()?adminLookup.data[0]:null;
   if(req.method==='GET') {
    if(driver) { const authorized=assertAuthorizedActiveDriver(driver);
     const rows=await supabaseRest<any[]>(env,'/rest/v1/express_driver_financial_entries?driver_id=eq.'+authorized.id+'&select=*&order=created_at.desc&limit=200');
