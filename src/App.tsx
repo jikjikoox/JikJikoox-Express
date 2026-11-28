@@ -1,11 +1,11 @@
-import { lazy, Suspense, useEffect, useState, type FormEvent } from 'react';
-import { Clock, LogOut, RefreshCw, ShieldAlert, Truck, UserPlus } from 'lucide-react';
+import { lazy, Suspense, useEffect, useState } from 'react';
+import { Clock, LogOut, RefreshCw, ShieldAlert, Truck } from 'lucide-react';
 import { BrandAccentBar, BrandLogo } from './components/BrandLogo';
+import { CourierApplicationPage } from './pages/CourierApplicationPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { PwaInstallPrompt } from './components/PwaInstallPrompt';
 import { CourierAppProvider, useCourierApp } from './context/CourierAppContext';
-import { DAKAR_ZONES, VEHICLE_LABELS } from './lib/missionWorkflow';
-import type { AppTab, VehicleType } from './types/delivery';
+import type { AppTab } from './types/delivery';
 
 const AppShell = lazy(() =>
   import('./components/AppShell').then((m) => ({ default: m.AppShell }))
@@ -49,169 +49,7 @@ const TAB_TITLES: Record<AppTab, string> = {
   profile: 'Mon profil',
 };
 
-function MissingDriverProfileGate() {
-  const { firebaseUser, completeCourierRegistration, enterDemoMode, logout } = useCourierApp();
-  const displayParts = (firebaseUser?.displayName || '').trim().split(/\s+/).filter(Boolean);
-  const [firstName, setFirstName] = useState(displayParts[0] || '');
-  const [lastName, setLastName] = useState(displayParts.slice(1).join(' ') || '');
-  const [phone, setPhone] = useState('+221 ');
-  const [vehicleType, setVehicleType] = useState<VehicleType>('scooter');
-  const [workZone, setWorkZone] = useState<string>(DAKAR_ZONES[0]);
-  const [termsAccepted, setTermsAccepted] = useState(false);
-  const [busy, setBusy] = useState(false);
-
-  const handleComplete = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setBusy(true);
-    try {
-      await completeCourierRegistration({
-        firstName,
-        lastName,
-        phone,
-        vehicleType,
-        workZone,
-        termsAccepted,
-      });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-[#F7F6F2] flex items-center justify-center p-5">
-      <div className="w-full max-w-md bg-white border border-[#E5E2D9] rounded-2xl overflow-hidden shadow-2xs">
-        <BrandAccentBar />
-        <div className="p-6 space-y-5">
-          <div className="flex justify-center">
-            <BrandLogo size="md" showWordmark />
-          </div>
-
-          <div className="w-12 h-12 rounded-xl bg-[#FEF6E4] text-[#8A5600] flex items-center justify-center mx-auto">
-            <UserPlus className="w-6 h-6" aria-hidden="true" />
-          </div>
-
-          <div className="text-center space-y-1.5">
-            <h1 className="text-xl font-extrabold text-[#141413]">Profil livreur introuvable</h1>
-            <p className="text-sm text-[#5A5851] leading-relaxed">
-              Votre compte Firebase (<strong className="text-[#141413]">{firebaseUser?.email}</strong>)
-              n’est pas encore enregistré dans <code className="font-mono text-xs">express_drivers</code>.
-              Complétez votre demande ci-dessous pour la soumettre à validation administrative.
-            </p>
-          </div>
-
-          <form onSubmit={handleComplete} className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <label className="text-xs font-semibold text-[#5A5851]">
-                Prénom
-                <input
-                  required
-                  minLength={2}
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  className="mt-1 w-full h-10 rounded-xl border border-[#D6D1C4] px-3 text-sm text-[#141413]"
-                />
-              </label>
-              <label className="text-xs font-semibold text-[#5A5851]">
-                Nom
-                <input
-                  required
-                  minLength={2}
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  className="mt-1 w-full h-10 rounded-xl border border-[#D6D1C4] px-3 text-sm text-[#141413]"
-                />
-              </label>
-            </div>
-
-            <label className="block text-xs font-semibold text-[#5A5851]">
-              Téléphone (avec indicatif)
-              <input
-                required
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="+221 77 000 00 00"
-                className="mt-1 w-full h-10 rounded-xl border border-[#D6D1C4] px-3 font-mono text-sm text-[#141413]"
-              />
-            </label>
-
-            <div className="grid grid-cols-2 gap-3">
-              <label className="text-xs font-semibold text-[#5A5851]">
-                Véhicule
-                <select
-                  value={vehicleType}
-                  onChange={(e) => setVehicleType(e.target.value as VehicleType)}
-                  className="mt-1 w-full h-10 rounded-xl border border-[#D6D1C4] bg-white px-2.5 text-sm text-[#141413]"
-                >
-                  {(Object.keys(VEHICLE_LABELS) as VehicleType[]).map((key) => (
-                    <option key={key} value={key}>
-                      {VEHICLE_LABELS[key]}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="text-xs font-semibold text-[#5A5851]">
-                Zone souhaitée
-                <select
-                  value={workZone}
-                  onChange={(e) => setWorkZone(e.target.value)}
-                  className="mt-1 w-full h-10 rounded-xl border border-[#D6D1C4] bg-white px-2.5 text-sm text-[#141413]"
-                >
-                  {DAKAR_ZONES.map((z) => (
-                    <option key={z} value={z}>
-                      {z}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            <label className="flex items-start gap-2 text-xs text-[#5A5851] cursor-pointer pt-1">
-              <input
-                type="checkbox"
-                required
-                checked={termsAccepted}
-                onChange={(e) => setTermsAccepted(e.target.checked)}
-                className="mt-0.5 w-4 h-4 accent-[#0E6E2D] shrink-0"
-              />
-              <span>
-                J’accepte les conditions d’utilisation de JikJikoox Express (validation administrative
-                requise).
-              </span>
-            </label>
-
-            <button
-              type="submit"
-              disabled={busy}
-              className="w-full min-h-[46px] rounded-xl bg-[#0E6E2D] hover:bg-[#095220] disabled:opacity-60 text-white font-semibold text-sm transition-colors cursor-pointer"
-            >
-              {busy ? 'Enregistrement...' : 'Finaliser ma demande livreur'}
-            </button>
-          </form>
-
-          <div className="space-y-2 border-t border-[#E5E2D9] pt-3">
-            <button
-              type="button"
-              onClick={enterDemoMode}
-              className="w-full min-h-[44px] px-4 rounded-xl bg-[#F7F6F2] hover:bg-[#EFECE4] border border-[#D6D1C4] text-[#141413] font-semibold text-xs inline-flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <Truck className="w-4 h-4 text-[#0E6E2D]" aria-hidden="true" />
-              <span>Explorer le mode démonstration</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => void logout()}
-              className="w-full min-h-[44px] px-4 rounded-xl border border-[#D6D1C4] hover:bg-[#F7F6F2] text-[#141413] font-semibold text-xs inline-flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <LogOut className="w-4 h-4" aria-hidden="true" />
-              <span>Se déconnecter</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+function MissingDriverProfileGate() { return <CourierApplicationPage />; }
 
 function CourierExpressRouter() {
   const {
