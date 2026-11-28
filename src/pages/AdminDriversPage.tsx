@@ -517,6 +517,12 @@ export function AdminDriversPage() {
                       <h3 className="font-bold text-sm">Dossier de confiance — pièces justificatives</h3>
                       <button type="button" onClick={() => setTrustCase(null)} className="text-xs underline">Fermer</button>
                     </div>
+                    <div className="grid gap-3 sm:grid-cols-2 rounded-lg bg-white border border-[#E5E2D9] p-3 text-xs">
+                      <div><p className="font-semibold text-[#5A5851]">Adresse de résidence</p><p className="mt-1 text-[#141413]">{String(trustCase.driver.residence_address || 'Non renseignée')}, {String(trustCase.driver.residence_city || '')} — {String(trustCase.driver.residence_region || '')}</p></div>
+                      <div><p className="font-semibold text-[#5A5851]">Contact de secours</p><p className="mt-1 text-[#141413]">{String(trustCase.driver.emergency_contact_name || 'Non renseigné')} · {String(trustCase.driver.emergency_contact_relationship || 'Lien non renseigné')} · {String(trustCase.driver.emergency_contact_phone || 'Téléphone non renseigné')}</p></div>
+                      <div><p className="font-semibold text-[#5A5851]">Assurance — émission</p><p className="mt-1 text-[#141413]">{String(trustCase.documents.find((doc) => doc.document_type === 'insurance_certificate')?.issued_at || 'Non renseignée')}</p></div>
+                      <div><p className="font-semibold text-[#5A5851]">Assurance — expiration</p><p className="mt-1 text-[#141413]">{String(trustCase.documents.find((doc) => doc.document_type === 'insurance_certificate')?.expires_at || trustCase.driver.insurance_expires_at || 'Non renseignée')}</p></div>
+                    </div>
                     <div className="grid gap-2 sm:grid-cols-2">
                       {trustCase.documents.map((doc) => (
                         <div key={String(doc.id)} className="rounded-lg border border-[#E5E2D9] bg-white p-3 text-xs space-y-2">
@@ -524,7 +530,7 @@ export function AdminDriversPage() {
                           <p className="text-[#77736A]">État : {String(doc.review_status)}</p>
                           {typeof doc.signedUrl === 'string' && <a className="text-[#0E6E2D] underline" href={doc.signedUrl} target="_blank" rel="noreferrer">Consulter le document (lien temporaire)</a>}
                           <div className="flex flex-wrap gap-2">
-                            <button disabled={trustBusy} onClick={() => void reviewTrustDocument(String(doc.id),'approved')} className="rounded-lg bg-[#0E6E2D] px-2 py-1 text-white">Approuver</button>
+                            <button disabled={trustBusy || typeof doc.signedUrl !== 'string'} title={typeof doc.signedUrl !== 'string' ? 'Document non consultable : validation bloquée.' : undefined} onClick={() => void reviewTrustDocument(String(doc.id),'approved')} className="rounded-lg bg-[#0E6E2D] px-2 py-1 text-white disabled:opacity-50">Approuver</button>
                             <button disabled={trustBusy} onClick={() => void reviewTrustDocument(String(doc.id),'rejected')} className="rounded-lg bg-red-50 px-2 py-1 text-red-700">Refuser</button>
                             <button disabled={trustBusy} onClick={() => void reviewTrustDocument(String(doc.id),'replacement_required')} className="rounded-lg bg-amber-50 px-2 py-1 text-amber-800">Remplacement</button>
                           </div>
