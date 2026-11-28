@@ -8,6 +8,9 @@ import {
   Database,
   Power,
   Truck,
+  MapPin,
+  Users,
+  ShieldCheck,
 } from 'lucide-react';
 import { BrandAccentBar } from '../components/BrandLogo';
 import { MissionCard } from '../components/MissionCard';
@@ -33,6 +36,8 @@ export function DashboardPage({ onSelectMission, onNavigateTab }: DashboardPageP
   const {
     mode,
     profile,
+    isAdminUser,
+    firebaseUser,
     missions,
     notifications,
     loadingData,
@@ -99,6 +104,39 @@ export function DashboardPage({ onSelectMission, onNavigateTab }: DashboardPageP
       }).format(new Date()),
     []
   );
+
+  if (isAdminUser && !profile) {
+    const adminName = firebaseUser?.displayName?.trim() || 'Administrateur';
+    return (
+      <div className="mx-auto w-full max-w-2xl space-y-4">
+        <section className="rounded-2xl border border-[#E5E2D9] bg-white p-5">
+          <BrandAccentBar className="h-[3px]" />
+          <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-[#0E6E2D]">Espace de gestion</p>
+          <h1 className="mt-1 text-2xl font-extrabold text-[#141413]">Bonjour, {adminName}</h1>
+          <p className="mt-2 text-sm text-[#5A5851]">Accédez directement aux opérations essentielles de JikJikoox Express.</p>
+          {firebaseUser?.email && <p className="mt-3 text-xs text-[#77736A]">{firebaseUser.email}</p>}
+        </section>
+        <section className="space-y-2">
+          <h2 className="text-base font-bold text-[#141413]">Actions rapides</h2>
+          {([
+            ['missions', ClipboardList, 'Commandes et missions', 'Consulter et gérer les livraisons'],
+            ['drivers', Users, 'Livreurs', 'Examiner les dossiers et validations'],
+            ['fleet', MapPin, 'Suivi de la flotte', 'Voir les livreurs sur la carte'],
+          ] as const).map(([tab, Icon, title, description]) => (
+            <button key={tab} type="button" onClick={() => onNavigateTab(tab)} className="w-full min-h-[72px] rounded-xl border border-[#E5E2D9] bg-white p-4 flex items-center gap-3 text-left hover:border-[#0E6E2D] transition-colors">
+              <span className="w-11 h-11 rounded-xl bg-[#ECF7EE] text-[#0E6E2D] flex items-center justify-center shrink-0"><Icon className="w-5 h-5" /></span>
+              <span className="min-w-0 flex-1"><span className="block font-semibold text-[#141413]">{title}</span><span className="block text-xs text-[#5A5851] mt-0.5">{description}</span></span>
+              <ArrowRight className="w-4 h-4 text-[#5A5851] shrink-0" />
+            </button>
+          ))}
+        </section>
+        <section className="rounded-xl border border-[#E5E2D9] bg-[#F7F6F2] p-4 flex items-start gap-3">
+          <ShieldCheck className="w-5 h-5 text-[#0E6E2D] shrink-0 mt-0.5" />
+          <p className="text-sm text-[#5A5851]">Votre session administrateur est authentifiée. Cette page ne nécessite pas de profil livreur.</p>
+        </section>
+      </div>
+    );
+  }
 
   if (!profile) return null;
 
