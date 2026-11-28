@@ -75,10 +75,10 @@ export function CourierApplicationPage(){
     const upload=await fetch(prepared.signedUrl,{method:'PUT',headers:{'Content-Type':file.type,'x-upsert':'false'},body:file});
     if(!upload.ok) throw new Error("Échec de l'envoi : "+doc.label);
     setProgress('Vérification : '+doc.label);
-    await callTrust(token,{action:'confirm-upload',storagePath:prepared.storagePath,documentType:doc.key,mimeType:file.type,fileSizeBytes:file.size,fileName:file.name});
+    await callTrust(token,{action:'confirm-upload',storagePath:prepared.storagePath,documentType:doc.key,mimeType:file.type,fileSizeBytes:file.size,fileName:file.name,issuedAt:doc.key==='insurance_certificate'?insuranceStart:null,expiresAt:doc.key==='insurance_certificate'?insuranceExpiry:null});
    }
    setProgress('Soumission du dossier');
-   await callTrust(token,{action:'submit-application',residenceAddress:address,residenceCity:city,residenceRegion:region,emergencyContactName:emergencyName,emergencyContactRelationship:emergencyRelation,emergencyContactPhone:emergencyPhone,insuranceIssuedAt:insuranceStart,insuranceExpiresAt:insuranceExpiry});
+   await callTrust(token,{action:'submit-application',residenceAddress:address,residenceCity:city,residenceRegion:region,emergencyContactName:emergencyName,emergencyContactRelationship:emergencyRelation,emergencyContactPhone:emergencyPhone,vehiclePlate:plate,insuranceIssuedAt:insuranceStart,insuranceExpiresAt:insuranceExpiry});
    setProgress('Dossier envoyé. Votre candidature sera examinée par JikJikoox.');
   }catch(err){setError(err instanceof Error?err.message:'Impossible de soumettre le dossier.');}
   finally{setBusy(false);}
