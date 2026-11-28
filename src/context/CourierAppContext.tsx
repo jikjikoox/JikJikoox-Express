@@ -310,7 +310,7 @@ export function CourierAppProvider({ children }: { children: React.ReactNode }) 
     const loadWithToken = async (forceRefresh: boolean) => {
       const idToken = await firebaseUser.getIdToken(forceRefresh);
       try {
-        const adminRes = await expressApi.fetchAdminProfile(idToken);
+        await expressApi.fetchAdminProfile(idToken);
         setIsAdminUser(true);
         setProfileNotFound(false);
         setProfile(null);
