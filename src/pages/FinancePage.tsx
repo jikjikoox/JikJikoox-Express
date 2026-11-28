@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Wallet, Receipt, Fuel, Plus, RefreshCw } from 'lucide-react';
+import { Wallet, Receipt, Plus, RefreshCw } from 'lucide-react';
 import { useCourierApp } from '../context/CourierAppContext';
 import { expressApi } from '../services/expressApi';
 
