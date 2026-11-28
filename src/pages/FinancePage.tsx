@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Wallet, Receipt, Plus, RefreshCw } from 'lucide-react';
 import { useCourierApp } from '../context/CourierAppContext';
 import { expressApi } from '../services/expressApi';
@@ -11,7 +11,7 @@ export function FinancePage(){
  const [data,setData]=useState<FinanceResponse|null>(null),[loading,setLoading]=useState(false),[err,setErr]=useState(''),[amount,setAmount]=useState(''),[category,setCategory]=useState('fuel'),[description,setDescription]=useState(''),[sending,setSending]=useState(false),[notice,setNotice]=useState('');
  const reload=async()=>{if(!firebaseUser||mode!=='firebase')return;setLoading(true);setErr('');try{const token=await firebaseUser.getIdToken();setData(await expressApi.fetchDriverFinance(token));}catch(e){setErr(e instanceof Error?e.message:'Chargement impossible');}finally{setLoading(false);}};
  useEffect(()=>{void reload();},[firebaseUser,mode]);
- const submit=async(e:React.FormEvent)=>{e.preventDefault();if(!firebaseUser)return;setSending(true);setNotice('');try{const token=await firebaseUser.getIdToken();await expressApi.submitDriverExpense(token,{amount:Number(amount),category,description,idempotencyKey:'exp_'+crypto.randomUUID()});setNotice('Dépense envoyée. Elle reste en attente de validation.');setAmount('');setDescription('');await reload();}catch(ex){setErr(ex instanceof Error?ex.message:'Envoi impossible');}finally{setSending(false);}};
+ const submit=async(e:FormEvent)=>{e.preventDefault();if(!firebaseUser)return;setSending(true);setNotice('');try{const token=await firebaseUser.getIdToken();await expressApi.submitDriverExpense(token,{amount:Number(amount),category,description,idempotencyKey:'exp_'+crypto.randomUUID()});setNotice('Dépense envoyée. Elle reste en attente de validation.');setAmount('');setDescription('');await reload();}catch(ex){setErr(ex instanceof Error?ex.message:'Envoi impossible');}finally{setSending(false);}};
  const labels=Object.fromEntries(categories);
  return <div className="space-y-5">
   <div className="rounded-2xl bg-[#0E6E2D] text-white p-5 shadow-sm"><div className="flex items-center gap-2 text-sm opacity-90"><Wallet className="w-5 h-5"/> Portefeuille livreur</div><p className="text-xs mt-3 opacity-80">Solde net estimatif (hors espèces COD à reverser)</p><p className="text-3xl font-black mt-1">{fmt(data?.summary?.estimatedNetXof||0)}</p></div>
