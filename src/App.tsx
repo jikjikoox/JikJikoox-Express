@@ -36,7 +36,7 @@ const MissionsPage = lazy(() =>
 const NotificationsPage = lazy(() =>
   import('./pages/NotificationsPage').then((m) => ({ default: m.NotificationsPage }))
 );
-const ProfilePage = lazy(() =>
+const FinancePage = lazy(() =>\n  import('./pages/FinancePage').then((m) => ({ default: m.FinancePage }))\n);\nconst ProfilePage = lazy(() =>
   import('./pages/ProfilePage').then((m) => ({ default: m.ProfilePage }))
 );
 
@@ -47,7 +47,7 @@ const TAB_TITLES: Record<AppTab, string> = {
   drivers: 'Validation livreurs',
   history: 'Historique',
   notifications: 'Notifications',
-  profile: 'Mon profil',
+  profile: 'Mon profil',\n  finance: 'Portefeuille & dépenses',
 };
 
 function MissingDriverProfileGate() { return <CourierApplicationPage />; }
