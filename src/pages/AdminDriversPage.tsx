@@ -14,12 +14,18 @@ import {
 } from 'lucide-react';
 import { useCourierApp } from '../context/CourierAppContext';
 import { VEHICLE_LABELS } from '../lib/missionWorkflow';
-import type { AdminDriverRow } from '../lib/supabaseContract';
+import { getSupabaseFunctionsBaseUrl, type AdminDriverRow } from '../lib/supabaseContract';
 import { expressApi, ExpressApiError } from '../services/expressApi';
-import { getSupabaseFunctionsBaseUrl } from '../lib/supabaseContract';
 import type { AccountStatus } from '../types/delivery';
 
 type FilterTab = 'all' | AccountStatus;
+type AdminDriverWithTrust = AdminDriverRow & {
+  verification_status?: string;
+  engagement_status?: string;
+  insurance_expires_at?: string | null;
+  identity_verified_at?: string | null;
+  address_verified_at?: string | null;
+};
 
 const DEMO_APPLICATIONS: AdminDriverRow[] = [
   {
@@ -93,7 +99,7 @@ const STATUS_BADGE: Record<AccountStatus, { label: string; className: string }> 
 
 export function AdminDriversPage() {
   const { mode, isAdminUser, firebaseUser, backendConnected, showToast } = useCourierApp();
-  const [drivers, setDrivers] = useState<AdminDriverRow[]>([]);
+  const [drivers, setDrivers] = useState<AdminDriverWithTrust[]>([]);
   const [filter, setFilter] = useState<FilterTab>('pending');
   const [loading, setLoading] = useState(true);
   const [busyDriverId, setBusyDriverId] = useState<string | null>(null);
@@ -107,57 +113,7 @@ export function AdminDriversPage() {
   const canAccess = isAdminUser || mode === 'demo';
 
   const loadDrivers = useCallback(async () => {
-    const trustRequest = async (driverId: string, body?: Record<string, unknown>) => {
-    if (!firebaseUser) throw new Error('Session administrateur absente.');
-    const token = await firebaseUser.getIdToken();
-    const base = getSupabaseFunctionsBaseUrl().replace(/\\/+$/, '');
-    const response = await fetch(body ? `${base}/courier-trust` : `${base}/courier-trust?driverId=${encodeURIComponent(driverId)}`, {
-      method: body ? 'POST' : 'GET',
-      headers: { Authorization: `Bearer ${token}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
-      body: body ? JSON.stringify({ ...body, driverId }) : undefined,
-    });
-    const payload = await response.json().catch(() => null);
-    if (!response.ok || !payload?.ok) throw new Error(payload?.error?.message || 'Opération dossier confiance impossible.');
-    return payload;
-  };
-
-  const openTrustCase = async (driverId: string) => {
-    setTrustBusy(true);
-    try {
-      const result = await trustRequest(driverId);
-      setTrustCase({ driverId, driver: result.driver, documents: result.documents || [] });
-      setIdentityConfirmed(false); setAddressConfirmed(false); setEngagementAccepted(false);
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Impossible de consulter le dossier.', 'red');
-    } finally { setTrustBusy(false); }
-  };
-
-  const reviewTrustDocument = async (documentId: string, reviewStatus: 'approved' | 'rejected' | 'replacement_required') => {
-    if (!trustCase) return;
-    setTrustBusy(true);
-    try {
-      await trustRequest(trustCase.driverId, { action: 'review-document', documentId, reviewStatus });
-      await openTrustCase(trustCase.driverId);
-      showToast('Décision documentaire enregistrée.', 'green');
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Validation documentaire impossible.', 'red');
-    } finally { setTrustBusy(false); }
-  };
-
-  const approveTrustCase = async () => {
-    if (!trustCase) return;
-    setTrustBusy(true);
-    try {
-      await trustRequest(trustCase.driverId, { action: 'approve-application', identityConfirmed, addressConfirmed, engagementAccepted });
-      showToast('Dossier confiance approuvé. Vous pouvez maintenant activer le livreur.', 'green');
-      await openTrustCase(trustCase.driverId);
-      await loadDrivers();
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Validation du dossier impossible.', 'red');
-    } finally { setTrustBusy(false); }
-  };
-
-  if (!canAccess) {
+    if (!canAccess) {
       setLoading(false);
       return;
     }
@@ -186,6 +142,84 @@ export function AdminDriversPage() {
       setLoading(false);
     }
   }, [canAccess, mode, firebaseUser, backendConnected]);
+
+  const trustRequest = async (driverId: string, body?: Record<string, unknown>) => {
+    if (!firebaseUser) throw new Error('Session administrateur absente.');
+    const token = await firebaseUser.getIdToken();
+    const base = getSupabaseFunctionsBaseUrl().replace(/\\/+$/, '');
+    const response = await fetch(
+      body
+        ? `${base}/courier-trust`
+        : `${base}/courier-trust?driverId=${encodeURIComponent(driverId)}`,
+      {
+        method: body ? 'POST' : 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...(body ? { 'Content-Type': 'application/json' } : {}),
+        },
+        body: body ? JSON.stringify({ ...body, driverId }) : undefined,
+      }
+    );
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.ok) {
+      throw new Error(payload?.error?.message || 'Opération dossier confiance impossible.');
+    }
+    return payload;
+  };
+
+  const openTrustCase = async (driverId: string) => {
+    setTrustBusy(true);
+    try {
+      const result = await trustRequest(driverId);
+      setTrustCase({ driverId, driver: result.driver, documents: result.documents || [] });
+      setIdentityConfirmed(false);
+      setAddressConfirmed(false);
+      setEngagementAccepted(false);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Impossible de consulter le dossier.', 'red');
+    } finally {
+      setTrustBusy(false);
+    }
+  };
+
+  const reviewTrustDocument = async (
+    documentId: string,
+    reviewStatus: 'approved' | 'rejected' | 'replacement_required'
+  ) => {
+    if (!trustCase) return;
+    setTrustBusy(true);
+    try {
+      await trustRequest(trustCase.driverId, { action: 'review-document', documentId, reviewStatus });
+      const result = await trustRequest(trustCase.driverId);
+      setTrustCase({ driverId: trustCase.driverId, driver: result.driver, documents: result.documents || [] });
+      showToast('Décision documentaire enregistrée.', 'green');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Validation documentaire impossible.', 'red');
+    } finally {
+      setTrustBusy(false);
+    }
+  };
+
+  const approveTrustCase = async () => {
+    if (!trustCase) return;
+    setTrustBusy(true);
+    try {
+      await trustRequest(trustCase.driverId, {
+        action: 'approve-application',
+        identityConfirmed,
+        addressConfirmed,
+        engagementAccepted,
+      });
+      showToast('Dossier confiance approuvé. L’activation est maintenant autorisée.', 'green');
+      const result = await trustRequest(trustCase.driverId);
+      setTrustCase({ driverId: trustCase.driverId, driver: result.driver, documents: result.documents || [] });
+      await loadDrivers();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Validation du dossier impossible.', 'red');
+    } finally {
+      setTrustBusy(false);
+    }
+  };
 
   useEffect(() => {
     void loadDrivers();
@@ -375,6 +409,14 @@ export function AdminDriversPage() {
           {filteredDrivers.map((driver) => {
             const badge = STATUS_BADGE[driver.account_status];
             const isBusy = busyDriverId === driver.id;
+            const trustApproved = mode === 'demo' || (
+              driver.verification_status === 'verified' &&
+              driver.engagement_status === 'accepted' &&
+              Boolean(driver.identity_verified_at) &&
+              Boolean(driver.address_verified_at) &&
+              Boolean(driver.insurance_expires_at) &&
+              driver.insurance_expires_at >= new Date().toISOString().slice(0, 10)
+            );
             const createdDate = new Date(driver.created_at).toLocaleDateString('fr-SN', {
               day: '2-digit',
               month: 'short',
@@ -431,7 +473,8 @@ export function AdminDriversPage() {
                   {driver.account_status !== 'active' && (
                     <button
                       type="button"
-                      disabled={isBusy}
+                      disabled={isBusy || !trustApproved}
+                      title={!trustApproved ? 'Dossier documentaire et vérifications manuelles à approuver avant activation.' : undefined}
                       onClick={() => void handleDecision(driver, 'active')}
                       className="min-h-[42px] px-3.5 rounded-xl bg-[#0E6E2D] hover:bg-[#095220] disabled:opacity-50 text-white text-xs font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
                     >
@@ -440,7 +483,7 @@ export function AdminDriversPage() {
                       ) : (
                         <UserCheck className="w-4 h-4" aria-hidden="true" />
                       )}
-                      <span>{driver.account_status === 'pending' ? 'Accepter' : 'Réactiver'}</span>
+                      <span>{driver.account_status === 'pending' ? 'Activer' : 'Réactiver'}</span>
                     </button>
                   )}
 
