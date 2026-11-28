@@ -10,6 +10,7 @@ import {
   Smartphone,
   Truck,
   Volume2,
+  UserRound,
 } from 'lucide-react';
 import { BrandAccentBar, BrandLogo } from '../components/BrandLogo';
 import { useCourierApp } from '../context/CourierAppContext';
@@ -21,6 +22,8 @@ export function ProfilePage() {
   const {
     mode,
     profile,
+    isAdminUser,
+    firebaseUser,
     pushState,
     updateProfile,
     enablePushNotifications,
@@ -51,6 +54,33 @@ export function ProfilePage() {
     setVehiclePlate(profile.vehiclePlate ?? '');
     setWorkZone(profile.workZone);
   }, [profile]);
+
+  if (isAdminUser && !profile) {
+    const displayName = firebaseUser?.displayName?.trim() || 'Administrateur';
+    const email = firebaseUser?.email || 'Adresse e-mail non disponible';
+    const avatar = firebaseUser?.photoURL;
+    return (
+      <div className="mx-auto w-full max-w-xl space-y-4">
+        <section className="rounded-2xl border border-[#E5E2D9] bg-white overflow-hidden">
+          <BrandAccentBar className="h-[3px]" />
+          <div className="p-5">
+            <h1 className="text-xl font-extrabold text-[#141413]">Mon compte</h1>
+            <p className="mt-1 text-sm text-[#5A5851]">Informations de votre session administrateur.</p>
+            <div className="mt-5 flex items-center gap-3">
+              {avatar ? <img src={avatar} alt="" className="w-14 h-14 rounded-full object-cover" referrerPolicy="no-referrer" /> : <div className="w-14 h-14 rounded-full bg-[#ECF7EE] text-[#0E6E2D] flex items-center justify-center"><UserRound className="w-6 h-6" /></div>}
+              <div className="min-w-0"><p className="font-bold text-[#141413]">{displayName}</p><p className="text-sm text-[#5A5851] break-all">{email}</p></div>
+            </div>
+          </div>
+        </section>
+        <section className="rounded-xl border border-[#E5E2D9] bg-white p-4 space-y-3">
+          <div className="flex justify-between gap-3"><span className="text-sm text-[#5A5851]">Connexion</span><span className="text-sm font-semibold text-[#0E6E2D]">Google / Firebase</span></div>
+          <div className="flex justify-between gap-3"><span className="text-sm text-[#5A5851]">Accès</span><span className="text-sm font-semibold text-[#141413]">Administrateur</span></div>
+          <p className="text-xs text-[#77736A]">Les autorisations sont gérées par le système. Cette page ne modifie aucun rôle ni profil livreur.</p>
+        </section>
+        <button type="button" onClick={() => void logout()} className="w-full min-h-[48px] rounded-xl bg-[#FDF0EE] border border-[#C6241B]/20 text-[#C6241B] font-semibold flex items-center justify-center gap-2"><LogOut className="w-4 h-4" /> Se déconnecter</button>
+      </div>
+    );
+  }
 
   if (!profile) return null;
 
