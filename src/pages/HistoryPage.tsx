@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { History } from 'lucide-react';
 import { MissionCard } from '../components/MissionCard';
 import { useCourierApp } from '../context/CourierAppContext';
 import { formatFcfa, MISSION_STATUS_META } from '../lib/missionWorkflow';
+import { expressApi } from '../services/expressApi';
 
 interface HistoryPageProps {
   onSelectMission: (missionId: string) => void;
@@ -18,8 +19,29 @@ const HISTORY_FILTERS: { id: HistoryFilter; label: string }[] = [
 ];
 
 export function HistoryPage({ onSelectMission }: HistoryPageProps) {
-  const { missions } = useCourierApp();
+  const { missions, mode, backendConnected, firebaseUser, profile } = useCourierApp();
+  const [metrics, setMetrics] = useState<Awaited<ReturnType<typeof expressApi.fetchDriverMetrics>> | null>(null);
+  const [metricsLoading, setMetricsLoading] = useState(false);
+  const [metricsError, setMetricsError] = useState<string | null>(null);
   const [filter, setFilter] = useState<HistoryFilter>('all');
+
+  useEffect(() => {
+    if (mode !== 'firebase' || !backendConnected || !firebaseUser || profile?.accountStatus !== 'active') {
+      setMetrics(null);
+      return;
+    }
+    let alive = true;
+    setMetricsLoading(true);
+    setMetricsError(null);
+    void firebaseUser.getIdToken().then(token => expressApi.fetchDriverMetrics(token)).then(result => {
+      if (alive) setMetrics(result);
+    }).catch(error => {
+      if (alive) setMetricsError(error instanceof Error ? error.message : 'Statistiques indisponibles pour le moment.');
+    }).finally(() => {
+      if (alive) setMetricsLoading(false);
+    });
+    return () => { alive = false; };
+  }, [mode, backendConnected, firebaseUser, profile?.accountStatus]);
 
   const closedMissions = useMemo(
     () => missions.filter((m) => !MISSION_STATUS_META[m.status].isActive),
@@ -63,7 +85,7 @@ export function HistoryPage({ onSelectMission }: HistoryPageProps) {
       </div>
 
       {/* Historical KPI Strip */}
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <section className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
         <div className="bg-white border border-[#E5E2D9] rounded-2xl p-4">
           <p className="text-xs font-medium text-[#5A5851]">Livrées</p>
           <p className="mt-1.5 font-mono text-2xl font-bold text-[#0E6E2D] tabular-nums">
@@ -91,6 +113,23 @@ export function HistoryPage({ onSelectMission }: HistoryPageProps) {
             {formatFcfa(summary.totalFees)}
           </p>
         </div>
+      </section>
+
+      <section className="rounded-2xl border border-[#E5E2D9] bg-white p-4 sm:p-5 space-y-3">
+        <div>
+          <h2 className="font-bold text-[#141413]">Mes données de tournée</h2>
+          <p className="mt-1 text-xs text-[#5A5851]">Distance estimée à partir des points GPS enregistrés pendant les missions, avec filtrage des points imprécis.</p>
+        </div>
+        {metricsLoading ? <p className="text-sm text-[#77736A]">Calcul des métriques…</p> : metricsError ? <p className="text-sm text-[#8A5600]">{metricsError}</p> : metrics ? (
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <div className="rounded-xl bg-[#F7F6F2] p-3"><p className="text-xs text-[#5A5851]">Distance GPS estimée</p><p className="mt-1 text-xl font-bold tabular-nums">{metrics.gpsDistanceKm.toLocaleString('fr-FR')} km</p></div>
+              <div className="rounded-xl bg-[#F7F6F2] p-3"><p className="text-xs text-[#5A5851]">Courses avec GPS</p><p className="mt-1 text-xl font-bold tabular-nums">{metrics.gpsCoverageCount} / {metrics.deliveredCount}</p></div>
+              <div className="rounded-xl bg-[#F7F6F2] p-3"><p className="text-xs text-[#5A5851]">Zones couvertes</p><p className="mt-1 text-xl font-bold tabular-nums">{metrics.zones.length}</p></div>
+            </div>
+            {metrics.zones.length>0 && <div className="overflow-x-auto"><table className="w-full min-w-[440px] text-sm"><thead><tr className="border-b text-left text-xs text-[#77736A]"><th className="py-2 pr-3">Zone/quartier</th><th className="py-2 pr-3">Courses</th><th className="py-2 pr-3">Distance</th><th className="py-2">Frais estimés</th></tr></thead><tbody>{metrics.zones.map(zone=><tr key={zone.zone} className="border-b last:border-0"><td className="py-2 pr-3 font-medium">{zone.zone}</td><td className="py-2 pr-3 tabular-nums">{zone.deliveries}</td><td className="py-2 pr-3 tabular-nums">{zone.distanceKm.toLocaleString('fr-FR')} km</td><td className="py-2 tabular-nums">{formatFcfa(zone.fees)}</td></tr>)}</tbody></table></div>}
+          </>
+        ) : <p className="text-sm text-[#5A5851]">Les statistiques détaillées seront disponibles dès que des livraisons réelles et leurs traces GPS seront enregistrées.</p>}
       </section>
 
       {/* Filter Segmented Bar */}
