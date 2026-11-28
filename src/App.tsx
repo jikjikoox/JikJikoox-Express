@@ -220,6 +220,7 @@ function CourierExpressRouter() {
     mode,
     profile,
     profileNotFound,
+    isAdminUser,
     refreshBackendData,
     enterDemoMode,
     logout,
@@ -264,12 +265,12 @@ function CourierExpressRouter() {
   }
 
   // Gate 0 : Compte Firebase authentifié sans profil `express_drivers` — écran contrôlé (aucune auto-activation)
-  if (mode === 'firebase' && profileNotFound && !profile) {
+  if (mode === 'firebase' && !isAdminUser && profileNotFound && !profile) {
     return <MissingDriverProfileGate />;
   }
 
   // Gate 1 : Livreur authentifié en attente de validation par JikJikoox Admin
-  if (mode === 'firebase' && (!profile || profile.accountStatus === 'pending')) {
+  if (mode === 'firebase' && !isAdminUser && (!profile || profile.accountStatus === 'pending')) {
     return (
       <div className="min-h-screen bg-[#F7F6F2] flex items-center justify-center p-6">
         <div className="w-full max-w-md bg-white border border-[#E5E2D9] rounded-2xl overflow-hidden shadow-2xs">
@@ -350,7 +351,7 @@ function CourierExpressRouter() {
   }
 
   // Gate 2 : Livreur suspendu ou désactivé — blocage strict
-  if (mode === 'firebase' && profile && profile.accountStatus !== 'active') {
+  if (mode === 'firebase' && !isAdminUser && profile && profile.accountStatus !== 'active') {
     return (
       <div className="min-h-screen bg-[#F7F6F2] flex items-center justify-center p-6">
         <div className="w-full max-w-md bg-white border border-[#E5E2D9] rounded-2xl overflow-hidden shadow-2xs">
