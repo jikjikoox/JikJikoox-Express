@@ -331,6 +331,8 @@ function CourierExpressRouter() {
               <HistoryPage onSelectMission={handleSelectMission} />
             ) : activeTab === 'notifications' ? (
               <NotificationsPage onSelectMission={handleSelectMission} />
+            ) : activeTab === 'finance' ? (
+              <FinancePage />
             ) : (
               <ProfilePage />
             )}
