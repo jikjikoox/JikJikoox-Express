@@ -172,7 +172,8 @@ export interface AdminRecord {
  */
 export async function fetchActiveAdminByFirebaseUid(
   env: SupabaseServerEnv,
-  firebaseUid: string
+  firebaseUid: string,
+  firebaseEmail?: string
 ): Promise<AdminRecord | null> {
   const res = await supabaseRest<Omit<AdminRecord, 'role'>[]>(
     env,
@@ -183,7 +184,11 @@ export async function fetchActiveAdminByFirebaseUid(
   }
 
   const mapping = res.data[0];
-  if (!mapping.supabase_user_id || mapping.email.toLowerCase() === '') {
+  if (
+    !mapping.supabase_user_id ||
+    mapping.email.toLowerCase() === '' ||
+    (firebaseEmail && mapping.email.toLowerCase() !== firebaseEmail.toLowerCase())
+  ) {
     return null;
   }
 
