@@ -280,6 +280,19 @@ export function createExpressApiClient(options: ExpressApiOptions = {}) {
       );
     },
 
+    fetchDriverMetrics(idToken: string) {
+      return request<{
+        ok: true;
+        generatedAt: string;
+        deliveredCount: number;
+        totalFees: number;
+        gpsDistanceKm: number;
+        gpsCoverageCount: number;
+        zones: Array<{ zone: string; deliveries: number; fees: number; distanceKm: number }>;
+        trips: Array<{ deliveryId: string; orderNumber: string; zone: string; fee: number; distanceKm: number; completedAt: string | null }>;
+      }>('driver-metrics', idToken, { method: 'GET', retryable: true });
+    },
+
     fetchDriverDeliveries(idToken: string) {
       return request<DriverDeliveriesEdgeResponse>('driver-deliveries', idToken, {
         method: 'GET',
