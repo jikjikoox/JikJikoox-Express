@@ -14,7 +14,6 @@ import {
   EyeOff,
   HelpCircle,
   ShieldCheck,
-  Truck,
   UserPlus,
   LogIn,
 } from 'lucide-react';
@@ -29,29 +28,29 @@ import type { VehicleType } from '../types/delivery';
 
 const KEY_FEATURES = [
   [
-    'Gestion des missions :',
-    'réception et consultation des commandes qui vous sont affectées à Dakar et dans les zones de livraison couvertes.',
+    'Missions attribuées :',
+    'consultez uniquement les livraisons confiées après activation de votre compte.',
   ],
   [
-    'Suivi des livraisons :',
-    'mise à jour des étapes de prise en charge, de collecte, d’acheminement et de remise au client.',
+    'Suivi opérationnel :',
+    'suivez les étapes de collecte et de remise au client à partir de votre espace.',
   ],
   [
-    'Géolocalisation GPS :',
-    'partage de votre position pendant les opérations de livraison, selon les autorisations accordées.',
+    'Position GPS :',
+    'utilisée uniquement pour les opérations de livraison, avec votre autorisation.',
   ],
   [
-    'Gestion des paiements :',
-    'suivi des montants à encaisser à la livraison (paiement à la réception / COD), en FCFA.',
+    'Encaissements :',
+    'consultez les montants à collecter et les consignes de paiement en FCFA.',
   ],
-  ['Preuves de livraison :', 'confirmation sécurisée de la remise de la commande.'],
+  ['Preuve de livraison :', 'confirmez la remise selon la procédure prévue.'],
   [
-    'Notifications en temps réel :',
-    'alertes concernant les nouvelles missions et les changements opérationnels.',
+    'Notifications :',
+    'recevez les informations utiles à vos missions.',
   ],
   [
-    'Tableau de bord :',
-    'consultation de vos livraisons, de vos performances et de vos activités hebdomadaires.',
+    'Compte sécurisé :',
+    'accès réservé aux livreurs dont le dossier a été contrôlé et approuvé.',
   ],
 ] as const;
 
@@ -85,7 +84,7 @@ export function mapFirebaseAuthError(error: unknown, projectId?: string): string
 }
 
 export function LoginPage() {
-  const { signInWithEmail, signInWithGoogle, enterDemoMode, authError, refreshBackendData } =
+  const { signInWithEmail, signInWithGoogle, authError, refreshBackendData } =
     useCourierApp();
   const { canShowInstallAction, canPromptInstall, isIosSafari, promptInstall } = usePWAInstall();
 
@@ -277,15 +276,13 @@ export function LoginPage() {
           <div className="max-w-xl space-y-5">
             <div className="space-y-2.5">
               <h1 className="text-2xl sm:text-3xl font-extrabold leading-tight">
-                JikJikoox Express — Espace Livreur
+                JikJikoox Express — Candidature livreur
               </h1>
               <p className="text-sm sm:text-base font-bold text-[#F4A61D]">
-                L’application professionnelle de livraison et de suivi des commandes JikJikoox au Sénégal.
+                Rejoignez notre équipe de livraison au Sénégal.
               </p>
               <p className="text-sm text-white/90 leading-relaxed">
-                Bienvenue dans votre espace de travail dédié à la gestion de vos livraisons. Consultez vos
-                missions, organisez vos déplacements et suivez vos performances depuis une interface simple et
-                sécurisée.
+                Déposez votre candidature en quelques étapes. Après vérification de votre identité, de vos documents et de votre véhicule par notre équipe, votre compte pourra être activé.
               </p>
             </div>
 
@@ -319,7 +316,7 @@ export function LoginPage() {
 
             <section className="pt-4 border-t border-white/15 space-y-3">
               <h2 className="text-xs font-bold uppercase tracking-wider text-[#F4A61D]">
-                Fonctionnalités clés
+                Après activation, vous pourrez
               </h2>
               <ul className="space-y-2 text-[13px] sm:text-sm text-white/90 leading-snug">
                 {KEY_FEATURES.map(([title, description]) => (
@@ -337,7 +334,7 @@ export function LoginPage() {
             </section>
 
             <p className="pt-3 border-t border-white/15 text-sm font-bold">
-              JikJikoox Express — Chaque commande, une livraison suivie et maîtrisée.
+              Votre candidature est la première étape. Aucune mission n’est accessible avant validation.
             </p>
           </div>
         </div>
@@ -347,7 +344,7 @@ export function LoginPage() {
       <div className="flex-1 flex items-center justify-center px-5 py-8 sm:px-10 lg:px-16 bg-white">
         <div className="w-full max-w-md space-y-5">
           <div className="hidden lg:block">
-            <BrandLogo size="md" showWordmark subtitle="Espace livreur officiel" />
+            <BrandLogo size="md" showWordmark subtitle="Recrutement et accès livreur" />
           </div>
 
           {/* Clear Two-Button Mode Switcher */}
@@ -390,8 +387,8 @@ export function LoginPage() {
             </h2>
             <p className="text-sm text-[#5A5851] mt-1">
               {view === 'login'
-                ? 'Accédez à vos missions, vos encaissements FCFA et vos preuves de livraison.'
-                : 'Complétez votre candidature. Votre compte sera vérifié par JikJikoox Admin avant activation.'}
+                ? 'Connectez-vous pour suivre votre candidature ou accéder à vos missions si votre compte est activé.'
+                : 'Créez votre compte candidat. Votre dossier complet (identité, permis, véhicule, assurance) sera vérifié avant activation.'}
             </p>
           </div>
 
@@ -642,14 +639,6 @@ export function LoginPage() {
                 className="w-full min-h-[48px] rounded-xl border border-[#D6D1C4] hover:bg-[#F7F6F2] text-[#141413] font-semibold text-sm disabled:opacity-60 transition-colors cursor-pointer"
               >
                 Continuer avec Google
-              </button>
-              <button
-                type="button"
-                onClick={enterDemoMode}
-                className="w-full min-h-[48px] rounded-xl bg-[#F7F6F2] hover:bg-[#EFECE4] border border-[#D6D1C4] text-[#141413] font-semibold text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer"
-              >
-                <Truck className="w-4 h-4 text-[#0E6E2D]" aria-hidden="true" />
-                <span>Explorer en mode démonstration</span>
               </button>
             </div>
           )}
