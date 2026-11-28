@@ -64,10 +64,11 @@ export function AppShell({
         BASE_NAV_ITEMS[2],
         BASE_NAV_ITEMS[3],
         BASE_NAV_ITEMS[4],
-        BASE_NAV_ITEMS[5],
       ]
     : BASE_NAV_ITEMS;
-  const mobileNavItems = BASE_NAV_ITEMS;
+  const mobileNavItems = showAdminTabs
+    ? BASE_NAV_ITEMS.filter((item) => item.id !== 'finance')
+    : BASE_NAV_ITEMS;
 
   return (
     <div className="min-h-screen bg-[#F7F6F2] text-[#141413] flex flex-col lg:flex-row">
