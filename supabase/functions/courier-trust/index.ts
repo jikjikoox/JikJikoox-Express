@@ -8,8 +8,8 @@ const TYPES = new Set(['image/jpeg','image/png','image/webp','application/pdf'])
 const DOCS = new Set(['identity_front','identity_back','license_front','license_back','vehicle_registration_front','vehicle_registration_back','insurance_certificate','profile_photo','address_proof']);
 const json = (v: unknown) => JSON.stringify(v);
 const isIsoDate = (value: unknown): value is string => {
-  if (typeof value !== 'string' || !/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return false;
-  const parsed = new Date(`${value}T00:00:00.000Z`);
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(\`${value}T00:00:00.000Z\`);
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 };
 async function storageRequest(env: ReturnType<typeof readDenoEnv>, path: string, init: RequestInit = {}) {
@@ -81,7 +81,9 @@ export async function handleCourierTrust(req: Request): Promise<Response> {
    const missing=required.filter(x=>!types.has(x));
    if(missing.length) return errorResponse('DOCUMENTS_MISSING',`Documents manquants : ${missing.join(', ')}`,400,cors);
    const patch={vehicle_plate:String(body.vehiclePlate||'').trim().slice(0,24),residence_address:String(body.residenceAddress||'').trim().slice(0,300),residence_city:String(body.residenceCity||'').trim().slice(0,100),residence_region:String(body.residenceRegion||'').trim().slice(0,100),emergency_contact_name:String(body.emergencyContactName||'').trim().slice(0,120),emergency_contact_relationship:String(body.emergencyContactRelationship||'').trim().slice(0,40),emergency_contact_phone:String(body.emergencyContactPhone||'').trim().slice(0,24),insurance_expires_at:String(body.insuranceExpiresAt||''),personal_data_consent_at:new Date().toISOString(),verification_status:'submitted',updated_at:new Date().toISOString()};
-   if(!patch.residence_address||!patch.residence_city||!patch.emergency_contact_name||!/^\+?[0-9][0-9 .()-]{6,22}$/.test(patch.emergency_contact_phone)||!/^\d{4}-\d{2}-\d{2}$/.test(patch.insurance_expires_at)||patch.insurance_expires_at<new Date().toISOString().slice(0,10)) return errorResponse('INVALID_APPLICATION','Adresse, contact de secours ou date d’assurance invalide.',400,cors);
+   const insuranceDoc=(docs.data||[]).find(x=>x.document_type==='insurance_certificate');
+   const insuranceIssuedAt=body.insuranceIssuedAt;
+   if(!patch.residence_address||!patch.residence_city||!patch.emergency_contact_name||!patch.emergency_contact_relationship||!/^\\+?[0-9][0-9 .()-]{6,22}$/.test(patch.emergency_contact_phone)||!isIsoDate(insuranceIssuedAt)||!isIsoDate(patch.insurance_expires_at)||insuranceIssuedAt>new Date().toISOString().slice(0,10)||patch.insurance_expires_at<new Date().toISOString().slice(0,10)||patch.insurance_expires_at<insuranceIssuedAt||!insuranceDoc||insuranceDoc.issued_at!==insuranceIssuedAt||insuranceDoc.expires_at!==patch.insurance_expires_at) return errorResponse('INVALID_APPLICATION','Adresse, contact de secours (nom, lien et téléphone) ou dates d’assurance incohérentes.',400,cors);
    const updated=await supabaseRest<any[]>(env,`/rest/v1/express_drivers?id=eq.${encodeURIComponent(driver.id)}`,{method:'PATCH',headers:{Prefer:'return=representation'},body:json(patch)});
    if(!updated.ok||!updated.data?.[0]) return errorResponse('APPLICATION_SAVE_FAILED','Impossible de soumettre le dossier.',500,cors);
    return jsonResponse({ok:true,profile:updated.data[0]},200,cors);
