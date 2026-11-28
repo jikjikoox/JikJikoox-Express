@@ -346,7 +346,7 @@ export function AppShell({
         aria-label="Navigation mobile"
         className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-[#E5E2D9] pb-safe"
       >
-        <div className="grid grid-cols-6 h-[60px] items-center">
+        <div className={`grid ${showAdminTabs ? "grid-cols-5" : "grid-cols-6"} h-[60px] items-center`}>
           {mobileNavItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
