@@ -161,20 +161,50 @@ export interface AdminRecord {
   email: string;
   display_name: string | null;
   is_active: boolean;
+  supabase_user_id: string;
+  role: 'admin' | 'super_admin';
 }
 
+/**
+ * L'identité Firebase n'accorde aucun rôle à elle seule.
+ * L'UID doit être explicitement lié à un profil Supabase actif,
+ * dont le rôle est relu côté serveur à chaque requête administrative.
+ */
 export async function fetchActiveAdminByFirebaseUid(
   env: SupabaseServerEnv,
   firebaseUid: string
 ): Promise<AdminRecord | null> {
-  const res = await supabaseRest<AdminRecord[]>(
+  const res = await supabaseRest<Omit<AdminRecord, 'role'>[]>(
     env,
-    `/rest/v1/express_admins?firebase_uid=eq.${encodeURIComponent(firebaseUid)}&is_active=eq.true&limit=1`
+    `/rest/v1/express_admins?firebase_uid=eq.${encodeURIComponent(firebaseUid)}&is_active=eq.true&select=firebase_uid,email,display_name,is_active,supabase_user_id&limit=1`
   );
-  if (!res.ok || !Array.isArray(res.data) || res.data.length === 0) {
+  if (!res.ok || !Array.isArray(res.data) || res.data.length !== 1) {
     return null;
   }
-  return res.data[0];
+
+  const mapping = res.data[0];
+  if (!mapping.supabase_user_id || mapping.email.toLowerCase() === '') {
+    return null;
+  }
+
+  const profileRes = await supabaseRest<Array<{ role: string; email: string | null }>>(
+    env,
+    `/rest/v1/profiles?user_id=eq.${encodeURIComponent(mapping.supabase_user_id)}&is_active=eq.true&select=role,email&limit=1`
+  );
+  if (!profileRes.ok || !Array.isArray(profileRes.data) || profileRes.data.length !== 1) {
+    return null;
+  }
+
+  const profile = profileRes.data[0];
+  if (
+    (profile.role !== 'admin' && profile.role !== 'super_admin') ||
+    !profile.email ||
+    profile.email.toLowerCase() !== mapping.email.toLowerCase()
+  ) {
+    return null;
+  }
+
+  return { ...mapping, role: profile.role };
 }
 
 export function assertAuthorizedAdmin(admin: AdminRecord | null): AdminRecord {
