@@ -410,7 +410,7 @@ async function setupIsolatedStagingEnvironment() {
       }
 
       if (tablePath === 'profiles' && method === 'GET') {
-        const userIdFilter = parsedUrl.searchParams.get('user_id')?.replace(/^eq\\./, '');
+        const userIdFilter = parsedUrl.searchParams.get('user_id')?.replace(/^eq\./, '');
         const activeFilter = parsedUrl.searchParams.get('is_active')?.replace(/^eq\\./, '');
         const rows = [...state.profiles.values()].filter((p) => (!userIdFilter || p.user_id === userIdFilter) && (!activeFilter || String(p.is_active) === activeFilter));
         return new Response(JSON.stringify(rows), { status: 200 });
