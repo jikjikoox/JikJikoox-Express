@@ -309,6 +309,20 @@ export function CourierAppProvider({ children }: { children: React.ReactNode }) 
 
     const loadWithToken = async (forceRefresh: boolean) => {
       const idToken = await firebaseUser.getIdToken(forceRefresh);
+      try {
+        const adminRes = await expressApi.fetchAdminProfile(idToken);
+        setIsAdminUser(true);
+        setProfileNotFound(false);
+        setProfile(null);
+        setMissions([]);
+        setNotifications([]);
+        return;
+      } catch (adminError) {
+        if (!(adminError instanceof ExpressApiError) || adminError.code !== 'ADMIN_REQUIRED') {
+          throw adminError;
+        }
+        setIsAdminUser(false);
+      }
       const profileRes = await expressApi.fetchDriverProfile(idToken);
       const mappedProfile = mapEdgeDriverToProfile(profileRes.profile);
       setProfileNotFound(false);
@@ -392,14 +406,7 @@ export function CourierAppProvider({ children }: { children: React.ReactNode }) 
     if (backendConnected) {
       void (async () => {
         try {
-          const adminCheck = getDoc(doc(db, 'admins', uid))
-            .then((snap) => {
-              if (active) setIsAdminUser(snap.exists() && snap.data()?.active === true);
-            })
-            .catch(() => {
-              if (active) setIsAdminUser(false);
-            });
-          await Promise.all([refreshBackendData(), adminCheck]);
+          await refreshBackendData();
         } finally {
           if (active) setLoadingData(false);
         }
