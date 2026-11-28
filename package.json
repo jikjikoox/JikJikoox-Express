@@ -18,6 +18,7 @@
     "lint:rules": "eslint firestore.rules",
     "validate:staging": "node scripts/validate-staging-env.mjs",
     "validate:staging:selftest": "node scripts/validate-staging-env.mjs --self-test",
+    "check:firebase-auth": "node scripts/check-firebase-auth.mjs",
     "test:security": "tsx tests/security.logic.test.ts",
     "test:supabase": "tsx tests/supabase.integration.test.ts",
     "test:features": "tsx tests/express.features.test.ts",

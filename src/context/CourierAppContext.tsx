@@ -9,6 +9,7 @@ import React, {
 } from 'react';
 import {
   onAuthStateChanged,
+  signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
   type User,
@@ -26,7 +27,13 @@ import {
   where,
   writeBatch,
 } from 'firebase/firestore';
-import { auth, db, googleProvider, testFirestoreConnection } from '../lib/firebase';
+import {
+  auth,
+  db,
+  firebaseProjectInfo,
+  googleProvider,
+  testFirestoreConnection,
+} from '../lib/firebase';
 import {
   detectPushSupportState,
   playPriorityNotificationChime,
@@ -47,6 +54,10 @@ import {
   useCourierGpsTracker,
 } from '../hooks/useCourierGpsTracker';
 import { expressApi, ExpressApiError } from '../services/expressApi';
+import {
+  classifySupabaseNetworkError,
+  type CriticalSupabaseNetworkError,
+} from '../lib/supabaseNetworkErrors';
 import { DEFAULT_COURIER_AVATAR } from '../lib/mediaAssets';
 import type {
   AccountStatus,
@@ -116,17 +127,22 @@ interface CourierAppContextValue {
   notifications: CourierNotification[];
   unreadCount: number;
   authError: string | null;
+  criticalNetworkError: CriticalSupabaseNetworkError | null;
+  retryingNetworkSync: boolean;
   toast: ToastMessage | null;
   gpsTracker: CourierGpsTrackerState;
   pushState: PushNotificationState;
   dismissToast: () => void;
+  dismissCriticalNetworkError: () => void;
+  retryCriticalNetworkSync: () => Promise<void>;
   showToast: (text: string, tone?: 'green' | 'yellow' | 'red') => void;
+  signInWithEmail: (email: string, password: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   completeCourierRegistration: (input: CourierRegistrationInput) => Promise<boolean>;
   enterDemoMode: () => void;
   exitDemoMode: () => void;
   logout: () => Promise<void>;
-  refreshBackendData: () => Promise<void>;
+  refreshBackendData: (options?: { triggeredByReconnect?: boolean }) => Promise<void>;
   toggleAvailability: () => Promise<void>;
   updateProfile: (updates: ProfileUpdateInput) => Promise<void>;
   enablePushNotifications: () => Promise<boolean>;
@@ -150,6 +166,49 @@ interface CourierAppContextValue {
 }
 
 const CourierAppContext = createContext<CourierAppContextValue | null>(null);
+
+export function logFirebaseAuthDiagnostic(operation: string, error: unknown): string | undefined {
+  const firebaseError = error as {
+    code?: string;
+    message?: string;
+  };
+  const errorCode = typeof firebaseError?.code === 'string' ? firebaseError.code : 'auth/unknown';
+  const errorMessage =
+    error instanceof Error ? error.message : String(firebaseError?.message ?? error);
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'server';
+
+  if (errorCode === 'auth/operation-not-allowed') {
+    console.error(
+      `[Firebase Auth Diagnostic] Code d’erreur Firebase détecté : "${errorCode}" lors de "${operation}". ` +
+        `Activez le fournisseur correspondant dans la console Firebase pour le projet "${firebaseProjectInfo.projectId}".`,
+      {
+        firebaseErrorCode: errorCode,
+        operation,
+        projectId: firebaseProjectInfo.projectId,
+        authDomain: firebaseProjectInfo.authDomain,
+        environment: firebaseProjectInfo.environment,
+        origin,
+        message: errorMessage,
+        consoleUrl: `https://console.firebase.google.com/project/${firebaseProjectInfo.projectId}/authentication/providers`,
+      }
+    );
+  } else {
+    console.error(
+      `[Firebase Auth Diagnostic] Erreur Firebase lors de "${operation}" (code : "${errorCode}").`,
+      {
+        firebaseErrorCode: errorCode,
+        operation,
+        projectId: firebaseProjectInfo.projectId,
+        authDomain: firebaseProjectInfo.authDomain,
+        environment: firebaseProjectInfo.environment,
+        origin,
+        message: errorMessage,
+      }
+    );
+  }
+
+  return firebaseError?.code;
+}
 
 function tsToIso(value: unknown, fallbackIso?: string): string {
   if (value instanceof Timestamp) {
@@ -252,25 +311,20 @@ export function CourierAppProvider({ children }: { children: React.ReactNode }) 
   const [missions, setMissions] = useState<DeliveryMission[]>([]);
   const [notifications, setNotifications] = useState<CourierNotification[]>([]);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [criticalNetworkError, setCriticalNetworkError] =
+    useState<CriticalSupabaseNetworkError | null>(null);
+  const [retryingNetworkSync, setRetryingNetworkSync] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const onOnline = () => setIsOnline(true);
-    const onOffline = () => setIsOnline(false);
-    window.addEventListener('online', onOnline);
-    window.addEventListener('offline', onOffline);
-    return () => {
-      window.removeEventListener('online', onOnline);
-      window.removeEventListener('offline', onOffline);
-    };
-  }, []);
+  const hadConnectionLossRef = useRef<boolean>(
+    typeof navigator !== 'undefined' && navigator.onLine === false
+  );
 
   const showToast = useCallback((text: string, tone: 'green' | 'yellow' | 'red' = 'green') => {
     setToast({ id: Date.now(), tone, text });
   }, []);
 
   const dismissToast = useCallback(() => setToast(null), []);
+  const dismissCriticalNetworkError = useCallback(() => setCriticalNetworkError(null), []);
 
   useEffect(() => {
     if (!toast) return;
@@ -289,6 +343,7 @@ export function CourierAppProvider({ children }: { children: React.ReactNode }) 
       } else {
         setIsAdminUser(false);
         setProfileNotFound(false);
+        setCriticalNetworkError(null);
         clearAllReadOnlySnapshots();
         setMode((prev) => {
           if (prev === 'demo') return 'demo';
@@ -304,94 +359,164 @@ export function CourierAppProvider({ children }: { children: React.ReactNode }) 
   }, []);
 
   // Chargement officiel depuis les Supabase Edge Functions (si configuré)
-  const refreshBackendData = useCallback(async () => {
-    if (mode !== 'firebase' || !firebaseUser || !backendConnected) return;
+  const refreshBackendData = useCallback(
+    async (options?: { triggeredByReconnect?: boolean }) => {
+      if (mode !== 'firebase' || !firebaseUser || !backendConnected) return;
 
-    const loadWithToken = async (forceRefresh: boolean) => {
-      const idToken = await firebaseUser.getIdToken(forceRefresh);
-      try {
-        await expressApi.fetchAdminProfile(idToken);
-        setIsAdminUser(true);
-        setProfileNotFound(false);
-        setProfile(null);
-        setMissions([]);
-        setNotifications([]);
-        return;
-      } catch (adminError) {
-        if (!(adminError instanceof ExpressApiError) || adminError.code !== 'ADMIN_REQUIRED') {
-          throw adminError;
-        }
-        setIsAdminUser(false);
-      }
-      const profileRes = await expressApi.fetchDriverProfile(idToken);
-      const mappedProfile = mapEdgeDriverToProfile(profileRes.profile);
-      setProfileNotFound(false);
-      setProfile(mappedProfile);
+      let currentEndpoint = 'admin-profile';
 
-      if (mappedProfile.accountStatus === 'active') {
-        const [delivRes, notifRes] = await Promise.all([
-          expressApi.fetchDriverDeliveries(idToken),
-          expressApi.fetchNotifications(idToken),
-        ]);
-        const mappedMissions = delivRes.deliveries.map(mapEdgeDeliveryToMission);
-        const mappedNotifications = notifRes.notifications.map(mapEdgeNotificationToClient);
-        setMissions(mappedMissions);
-        setNotifications(mappedNotifications);
-        saveReadOnlySnapshot(firebaseUser.uid, {
-          profile: mappedProfile,
-          missions: mappedMissions,
-          notifications: mappedNotifications,
-          savedAtIso: new Date().toISOString(),
-        });
-      } else {
-        setMissions([]);
-        setNotifications([]);
-      }
-    };
-
-    try {
-      await loadWithToken(false);
-    } catch (err) {
-      if (err instanceof ExpressApiError) {
-        if (err.status === 404 && err.code === 'DRIVER_NOT_REGISTERED') {
+      const loadWithToken = async (forceRefresh: boolean) => {
+        currentEndpoint = 'admin-profile';
+        const idToken = await firebaseUser.getIdToken(forceRefresh);
+        try {
+          await expressApi.fetchAdminProfile(idToken);
+          setIsAdminUser(true);
+          setProfileNotFound(false);
           setProfile(null);
           setMissions([]);
           setNotifications([]);
-          setProfileNotFound(true);
           return;
+        } catch (adminError) {
+          if (!(adminError instanceof ExpressApiError) || adminError.code !== 'ADMIN_REQUIRED') {
+            throw adminError;
+          }
+          setIsAdminUser(false);
         }
-        if (err.status === 401 && (err.code === 'TOKEN_EXPIRED' || err.code === 'TOKEN_INVALID')) {
-          try {
-            await loadWithToken(true);
-            return;
-          } catch {
-            clearAllReadOnlySnapshots();
-            await signOut(auth).catch(() => undefined);
-            setMode('unauthenticated');
+
+        currentEndpoint = 'driver-profile';
+        const profileRes = await expressApi.fetchDriverProfile(idToken);
+        const mappedProfile = mapEdgeDriverToProfile(profileRes.profile);
+        setProfileNotFound(false);
+        setProfile(mappedProfile);
+
+        if (mappedProfile.accountStatus === 'active') {
+          currentEndpoint = 'driver-deliveries';
+          const [delivRes, notifRes] = await Promise.all([
+            expressApi.fetchDriverDeliveries(idToken),
+            expressApi.fetchNotifications(idToken),
+          ]);
+          const mappedMissions = delivRes.deliveries.map(mapEdgeDeliveryToMission);
+          const mappedNotifications = notifRes.notifications.map(mapEdgeNotificationToClient);
+          setMissions(mappedMissions);
+          setNotifications(mappedNotifications);
+          saveReadOnlySnapshot(firebaseUser.uid, {
+            profile: mappedProfile,
+            missions: mappedMissions,
+            notifications: mappedNotifications,
+            savedAtIso: new Date().toISOString(),
+          });
+        } else {
+          setMissions([]);
+          setNotifications([]);
+        }
+      };
+
+      try {
+        await loadWithToken(false);
+        setCriticalNetworkError(null);
+        hadConnectionLossRef.current = false;
+      } catch (err) {
+        if (err instanceof ExpressApiError) {
+          if (err.status === 404 && err.code === 'DRIVER_NOT_REGISTERED') {
+            setCriticalNetworkError(null);
             setProfile(null);
             setMissions([]);
             setNotifications([]);
-            setAuthError('Votre session a expiré. Veuillez vous reconnecter.');
+            setProfileNotFound(true);
             return;
           }
+          if (err.status === 401 && (err.code === 'TOKEN_EXPIRED' || err.code === 'TOKEN_INVALID')) {
+            try {
+              await loadWithToken(true);
+              setCriticalNetworkError(null);
+              hadConnectionLossRef.current = false;
+              return;
+            } catch (retryErr) {
+              const retryNetErr = classifySupabaseNetworkError(retryErr, {
+                endpoint:
+                  retryErr instanceof ExpressApiError
+                    ? retryErr.endpoint || currentEndpoint
+                    : currentEndpoint,
+                afterConnectionLoss:
+                  Boolean(options?.triggeredByReconnect) || hadConnectionLossRef.current,
+                hasCachedSnapshot: Boolean(loadReadOnlySnapshot(firebaseUser.uid)),
+              });
+              if (retryNetErr) {
+                setCriticalNetworkError(retryNetErr);
+                return;
+              }
+              clearAllReadOnlySnapshots();
+              await signOut(auth).catch(() => undefined);
+              setMode('unauthenticated');
+              setCriticalNetworkError(null);
+              setProfile(null);
+              setMissions([]);
+              setNotifications([]);
+              setAuthError('Votre session a expiré. Veuillez vous reconnecter.');
+              return;
+            }
+          }
         }
-        if (err.code === 'OFFLINE_NO_CONNECTION' || err.code === 'NETWORK_UNREACHABLE') {
-          const cached = loadReadOnlySnapshot(firebaseUser.uid);
+
+        const cached = loadReadOnlySnapshot(firebaseUser.uid);
+        const criticalErr = classifySupabaseNetworkError(err, {
+          endpoint:
+            err instanceof ExpressApiError ? err.endpoint || currentEndpoint : currentEndpoint,
+          afterConnectionLoss:
+            Boolean(options?.triggeredByReconnect) || hadConnectionLossRef.current,
+          hasCachedSnapshot: Boolean(cached),
+        });
+
+        if (criticalErr) {
           if (cached) {
             setProfile(cached.profile);
             setMissions(cached.missions);
             setNotifications(cached.notifications);
-            showToast(
-              'Mode hors connexion : affichage des dernières missions chargées (lecture seule).',
-              'yellow'
-            );
-            return;
           }
+          setCriticalNetworkError(criticalErr);
+          return;
         }
-        showToast(err.message, 'red');
+
+        if (err instanceof ExpressApiError) {
+          showToast(err.message, 'red');
+        }
       }
+    },
+    [mode, firebaseUser, backendConnected, showToast]
+  );
+
+  const retryCriticalNetworkSync = useCallback(async () => {
+    if (retryingNetworkSync) return;
+    setRetryingNetworkSync(true);
+    try {
+      await refreshBackendData({
+        triggeredByReconnect: criticalNetworkError?.afterConnectionLoss ?? hadConnectionLossRef.current,
+      });
+    } finally {
+      setRetryingNetworkSync(false);
     }
-  }, [mode, firebaseUser, backendConnected, showToast]);
+  }, [retryingNetworkSync, refreshBackendData, criticalNetworkError?.afterConnectionLoss]);
+
+  // Suivi de perte / reprise de connexion réseau avec resynchronisation Supabase automatique
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onOffline = () => {
+      setIsOnline(false);
+      hadConnectionLossRef.current = true;
+    };
+    const onOnline = () => {
+      setIsOnline(true);
+      if (hadConnectionLossRef.current && mode === 'firebase' && firebaseUser && backendConnected) {
+        void refreshBackendData({ triggeredByReconnect: true });
+      }
+    };
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+    };
+  }, [mode, firebaseUser, backendConnected, refreshBackendData]);
 
   // 2. Profil livreur : Supabase Edge Function en priorité si configuré, sinon miroir Firestore
   useEffect(() => {
@@ -619,6 +744,26 @@ export function CourierAppProvider({ children }: { children: React.ReactNode }) 
     };
   }, [isAuthorizedActiveCourier, firebaseUser, mode, backendConnected]);
 
+  const signInWithEmail = useCallback(async (email: string, password: string) => {
+    setAuthError(null);
+    try {
+      await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password);
+      setMode('firebase');
+    } catch (error) {
+      const code = logFirebaseAuthDiagnostic('signInWithEmail', error);
+      if (code === 'auth/operation-not-allowed') {
+        setAuthError(
+          `La connexion par e-mail et mot de passe n’est pas encore activée dans Firebase Authentication (${firebaseProjectInfo.projectId}).`
+        );
+      } else if (code === 'auth/unauthorized-domain') {
+        setAuthError(
+          `Ce domaine n’est pas encore ajouté aux Domaines autorisés dans Firebase Authentication (${firebaseProjectInfo.projectId}).`
+        );
+      }
+      throw error;
+    }
+  }, []);
+
   const signInWithGoogle = useCallback(async () => {
     setAuthError(null);
     try {
@@ -626,11 +771,23 @@ export function CourierAppProvider({ children }: { children: React.ReactNode }) 
       setMode('firebase');
       showToast('Authentification Google réussie.', 'green');
     } catch (error) {
-      const code = (error as { code?: string })?.code;
+      const code = logFirebaseAuthDiagnostic('signInWithGoogle', error);
       if (code === 'auth/popup-closed-by-user') {
         setAuthError('Fenêtre de connexion fermée avant validation.');
+      } else if (code === 'auth/operation-not-allowed') {
+        setAuthError(
+          `La connexion Google n’est pas encore activée dans Firebase Authentication (${firebaseProjectInfo.projectId}).`
+        );
+      } else if (code === 'auth/unauthorized-domain') {
+        setAuthError(
+          `Ce domaine n’est pas encore ajouté aux Domaines autorisés dans Firebase Authentication (${firebaseProjectInfo.projectId}).`
+        );
+      } else if (code === 'auth/popup-blocked') {
+        setAuthError(
+          'La fenêtre de connexion Google a été bloquée par votre navigateur. Autorisez les pop-ups puis réessayez.'
+        );
       } else {
-        setAuthError('Impossible de finaliser la connexion Google. Veuillez réessayer.');
+        setAuthError('Impossible de finaliser la connexion Google. Veuillez réessayayer.');
       }
     }
   }, [showToast]);
@@ -661,6 +818,9 @@ export function CourierAppProvider({ children }: { children: React.ReactNode }) 
         );
         return true;
       } catch (err) {
+        if (!(err instanceof ExpressApiError)) {
+          logFirebaseAuthDiagnostic('completeCourierRegistration', err);
+        }
         const message =
           err instanceof ExpressApiError
             ? err.message
@@ -675,6 +835,7 @@ export function CourierAppProvider({ children }: { children: React.ReactNode }) 
   // Mode démonstration 100 % local en mémoire — ZERO appel Supabase / Firebase (chargé à la demande)
   const enterDemoMode = useCallback(() => {
     setAuthError(null);
+    setCriticalNetworkError(null);
     setProfileNotFound(false);
     setLoadingData(true);
     void import('../data/demo/mockCourierData')
@@ -691,6 +852,7 @@ export function CourierAppProvider({ children }: { children: React.ReactNode }) 
   }, [showToast]);
 
   const exitDemoMode = useCallback(() => {
+    setCriticalNetworkError(null);
     setProfile(null);
     setProfileNotFound(false);
     setMissions([]);
@@ -963,15 +1125,21 @@ export function CourierAppProvider({ children }: { children: React.ReactNode }) 
   const logout = useCallback(async () => {
     gpsTracker.stopTracking();
     clearAllReadOnlySnapshots();
-    if (firebaseUser) {
-      await signOut(auth);
+    try {
+      if (firebaseUser) {
+        await signOut(auth);
+      }
+    } catch (error) {
+      logFirebaseAuthDiagnostic('logout', error);
+    } finally {
+      setMode('unauthenticated');
+      setIsAdminUser(false);
+      setCriticalNetworkError(null);
+      setProfile(null);
+      setProfileNotFound(false);
+      setMissions([]);
+      setNotifications([]);
     }
-    setMode('unauthenticated');
-    setIsAdminUser(false);
-    setProfile(null);
-    setProfileNotFound(false);
-    setMissions([]);
-    setNotifications([]);
     showToast('Session clôturée en toute sécurité.', 'green');
   }, [firebaseUser, gpsTracker, showToast]);
 
@@ -1343,11 +1511,16 @@ export function CourierAppProvider({ children }: { children: React.ReactNode }) 
       notifications,
       unreadCount,
       authError,
+      criticalNetworkError,
+      retryingNetworkSync,
       toast,
       gpsTracker,
       pushState,
       dismissToast,
+      dismissCriticalNetworkError,
+      retryCriticalNetworkSync,
       showToast,
+      signInWithEmail,
       signInWithGoogle,
       completeCourierRegistration,
       enterDemoMode,
@@ -1377,11 +1550,16 @@ export function CourierAppProvider({ children }: { children: React.ReactNode }) 
       notifications,
       unreadCount,
       authError,
+      criticalNetworkError,
+      retryingNetworkSync,
       toast,
       gpsTracker,
       pushState,
       dismissToast,
+      dismissCriticalNetworkError,
+      retryCriticalNetworkSync,
       showToast,
+      signInWithEmail,
       signInWithGoogle,
       completeCourierRegistration,
       enterDemoMode,

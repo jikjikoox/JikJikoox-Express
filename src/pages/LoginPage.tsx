@@ -3,7 +3,6 @@ import {
   createUserWithEmailAndPassword,
   sendEmailVerification,
   sendPasswordResetEmail,
-  signInWithEmailAndPassword,
   updateProfile,
 } from 'firebase/auth';
 import {
@@ -20,9 +19,9 @@ import {
   LogIn,
 } from 'lucide-react';
 import { BrandAccentBar, BrandLogo } from '../components/BrandLogo';
-import { useCourierApp } from '../context/CourierAppContext';
+import { logFirebaseAuthDiagnostic, useCourierApp } from '../context/CourierAppContext';
 import { usePWAInstall } from '../hooks/usePWAInstall';
-import { auth } from '../lib/firebase';
+import { auth, firebaseProjectInfo } from '../lib/firebase';
 import { LOGIN_HERO_IMAGE } from '../lib/mediaAssets';
 import { DAKAR_ZONES, VEHICLE_LABELS } from '../lib/missionWorkflow';
 import { expressApi, ExpressApiError } from '../services/expressApi';
@@ -58,15 +57,21 @@ const KEY_FEATURES = [
 
 type View = 'login' | 'register';
 
-export function mapFirebaseAuthError(error: unknown): string {
+export function mapFirebaseAuthError(error: unknown, projectId?: string): string {
   if (error instanceof ExpressApiError) {
     return error.message;
   }
   const code = (error as { code?: string })?.code || '';
+  const projectHint = projectId ? ` (${projectId})` : '';
   const messages: Record<string, string> = {
+    'auth/operation-not-allowed': `La connexion par e-mail et mot de passe n’est pas encore activée dans Firebase Authentication pour le projet${projectHint}. Activez « Adresse e-mail/Mot de passe » dans la console Firebase ou utilisez « Continuer avec Google ».`,
+    'auth/unauthorized-domain': `Ce domaine n’est pas encore autorisé dans Firebase Authentication${projectHint} (Paramètres → Domaines autorisés).`,
+    'auth/popup-blocked':
+      'La fenêtre de connexion Google a été bloquée par votre navigateur. Autorisez les pop-ups puis réessayez.',
     'auth/invalid-credential': 'Adresse e-mail ou mot de passe incorrect.',
     'auth/user-not-found': 'Aucun compte ne correspond à cette adresse e-mail.',
     'auth/wrong-password': 'Mot de passe incorrect.',
+    'auth/user-disabled': 'Ce compte a été désactivé par un administrateur.',
     'auth/email-already-in-use': 'Cette adresse e-mail possède déjà un compte. Connectez-vous.',
     'auth/weak-password': 'Le mot de passe doit contenir au moins 6 caractères.',
     'auth/invalid-email': 'Adresse e-mail invalide.',
@@ -80,7 +85,8 @@ export function mapFirebaseAuthError(error: unknown): string {
 }
 
 export function LoginPage() {
-  const { signInWithGoogle, enterDemoMode, authError, refreshBackendData } = useCourierApp();
+  const { signInWithEmail, signInWithGoogle, enterDemoMode, authError, refreshBackendData } =
+    useCourierApp();
   const { canShowInstallAction, canPromptInstall, isIosSafari, promptInstall } = usePWAInstall();
 
   const [view, setView] = useState<View>('login');
@@ -97,6 +103,7 @@ export function LoginPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [emailPasswordUnavailable, setEmailPasswordUnavailable] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [showIosGuide, setShowIosGuide] = useState(false);
   const [heroError, setHeroError] = useState(false);
@@ -104,6 +111,7 @@ export function LoginPage() {
   const switchView = (next: View) => {
     setView(next);
     setError(null);
+    setEmailPasswordUnavailable(false);
     setNotice(null);
   };
 
@@ -144,7 +152,7 @@ export function LoginPage() {
     setBusy(true);
     try {
       if (view === 'login') {
-        await signInWithEmailAndPassword(auth, cleanEmail, password);
+        await signInWithEmail(cleanEmail, password);
         return;
       }
 
@@ -180,7 +188,13 @@ export function LoginPage() {
         'Votre demande d’inscription a été enregistrée. Votre compte est en attente de validation par JikJikoox Admin.'
       );
     } catch (err) {
-      setError(mapFirebaseAuthError(err));
+      if (view === 'register') {
+        logFirebaseAuthDiagnostic('registerWithEmail', err);
+      }
+      if ((err as { code?: string })?.code === 'auth/operation-not-allowed') {
+        setEmailPasswordUnavailable(true);
+      }
+      setError(mapFirebaseAuthError(err, firebaseProjectInfo.projectId));
     } finally {
       setBusy(false);
     }
@@ -210,7 +224,11 @@ export function LoginPage() {
       await sendPasswordResetEmail(auth, cleanEmail);
       setNotice('Un lien de réinitialisation de mot de passe vient d’être envoyé à votre adresse e-mail.');
     } catch (err) {
-      setError(mapFirebaseAuthError(err));
+      logFirebaseAuthDiagnostic('sendPasswordResetEmail', err);
+      if ((err as { code?: string })?.code === 'auth/operation-not-allowed') {
+        setEmailPasswordUnavailable(true);
+      }
+      setError(mapFirebaseAuthError(err, firebaseProjectInfo.projectId));
     } finally {
       setBusy(false);
     }
@@ -380,10 +398,22 @@ export function LoginPage() {
           {(error || authError) && (
             <div
               role="alert"
-              className="rounded-xl bg-[#FDF0EE] border border-[#C6241B]/25 p-3.5 flex gap-2 text-sm text-[#921A14]"
+              className="rounded-xl bg-[#FDF0EE] border border-[#C6241B]/25 p-3.5 space-y-2.5 text-sm text-[#921A14]"
             >
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
-              <span>{error || authError}</span>
+              <div className="flex gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
+                <span>{error || authError}</span>
+              </div>
+              {emailPasswordUnavailable && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void handleGoogleLogin()}
+                  className="w-full min-h-[42px] px-3 rounded-lg bg-white border border-[#C6241B]/30 hover:bg-[#FAF5F4] text-[#141413] text-xs font-semibold transition-colors cursor-pointer"
+                >
+                  Continuer avec Google à la place
+                </button>
+              )}
             </div>
           )}
 

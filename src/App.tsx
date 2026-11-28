@@ -1,8 +1,9 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
-import { Clock, LogOut, RefreshCw, ShieldAlert, Truck } from 'lucide-react';
+import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
+import { Clock, LogOut, RefreshCw, ShieldAlert, Truck, WifiOff } from 'lucide-react';
 import { BrandAccentBar, BrandLogo } from './components/BrandLogo';
 import { CourierApplicationPage } from './pages/CourierApplicationPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { GlobalNetworkAlert } from './components/GlobalNetworkAlert';
 import { PwaInstallPrompt } from './components/PwaInstallPrompt';
 import { CourierAppProvider, useCourierApp } from './context/CourierAppContext';
 import type { AppTab } from './types/delivery';
@@ -59,7 +60,10 @@ function CourierExpressRouter() {
     profile,
     profileNotFound,
     isAdminUser,
+    criticalNetworkError,
+    retryingNetworkSync,
     refreshBackendData,
+    retryCriticalNetworkSync,
     enterDemoMode,
     logout,
   } = useCourierApp();
@@ -77,8 +81,27 @@ function CourierExpressRouter() {
     }
   }, []);
 
+  const handleSelectTab = (tab: AppTab) => {
+    setSelectedMissionId(null);
+    setActiveTab(tab);
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  };
+
+  const handleSelectMission = (missionId: string) => {
+    setSelectedMissionId(missionId);
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  };
+
+  const handleBackFromMission = () => {
+    setSelectedMissionId(null);
+  };
+
+  const pageTitle = selectedMissionId ? 'Détail de la mission' : TAB_TITLES[activeTab];
+
+  let routeContent: ReactNode;
+
   if (!authReady || (mode === 'firebase' && loadingData && !profile && !profileNotFound)) {
-    return (
+    routeContent = (
       <div className="min-h-screen bg-[#F7F6F2] flex flex-col items-center justify-center gap-4 p-6">
         <BrandLogo size="lg" showWordmark />
         <p className="text-sm font-medium text-[#5A5851]">
@@ -86,10 +109,8 @@ function CourierExpressRouter() {
         </p>
       </div>
     );
-  }
-
-  if (mode === 'unauthenticated') {
-    return (
+  } else if (mode === 'unauthenticated') {
+    routeContent = (
       <Suspense
         fallback={
           <div className="min-h-screen bg-[#F7F6F2] flex items-center justify-center p-6">
@@ -100,16 +121,69 @@ function CourierExpressRouter() {
         <LoginPage />
       </Suspense>
     );
-  }
-
-  // Gate 0 : Compte Firebase authentifié sans profil `express_drivers` — écran contrôlé (aucune auto-activation)
-  if (mode === 'firebase' && !isAdminUser && profileNotFound && !profile) {
-    return <MissingDriverProfileGate />;
-  }
-
-  // Gate 1 : Livreur authentifié en attente de validation par JikJikoox Admin
-  if (mode === 'firebase' && !isAdminUser && (!profile || profile.accountStatus === 'pending')) {
-    return (
+  } else if (mode === 'firebase' && !isAdminUser && !profile && criticalNetworkError) {
+    routeContent = (
+      <div className="min-h-screen bg-[#F7F6F2] flex items-center justify-center p-6 pt-28">
+        <div className="w-full max-w-md bg-white border border-[#E5E2D9] rounded-2xl overflow-hidden shadow-2xs">
+          <BrandAccentBar />
+          <div className="p-6 space-y-5">
+            <div className="flex justify-center">
+              <BrandLogo size="md" showWordmark />
+            </div>
+            <div className="w-12 h-12 rounded-xl bg-[#FDF0EE] text-[#C6241B] flex items-center justify-center mx-auto">
+              <WifiOff className="w-6 h-6" aria-hidden="true" />
+            </div>
+            <div className="text-center space-y-2">
+              <h1 className="text-xl font-extrabold text-[#141413]">
+                Synchronisation Supabase indisponible
+              </h1>
+              <p className="text-sm text-[#5A5851] leading-relaxed">
+                Impossible de charger votre profil livreur depuis les fonctions Supabase après la
+                perte de connexion. Vérifiez votre accès Internet puis relancez le chargement.
+              </p>
+            </div>
+            <div className="space-y-2.5">
+              <button
+                type="button"
+                disabled={retryingNetworkSync}
+                onClick={() => void retryCriticalNetworkSync()}
+                className="w-full min-h-[46px] px-4 rounded-xl bg-[#C6241B] hover:bg-[#9E1B14] disabled:opacity-60 text-white font-semibold text-sm inline-flex items-center justify-center gap-2 transition-colors cursor-pointer"
+              >
+                <RefreshCw
+                  className={`w-4 h-4 ${retryingNetworkSync ? 'animate-spin' : ''}`}
+                  aria-hidden="true"
+                />
+                <span>
+                  {retryingNetworkSync ? 'Reconnexion en cours...' : 'Réessayer le chargement'}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={enterDemoMode}
+                className="w-full min-h-[46px] px-4 rounded-xl bg-[#F7F6F2] hover:bg-[#EFECE4] border border-[#D6D1C4] text-[#141413] font-semibold text-sm inline-flex items-center justify-center gap-2 transition-colors cursor-pointer"
+              >
+                <Truck className="w-4 h-4 text-[#0E6E2D]" aria-hidden="true" />
+                <span>Explorer le mode démonstration local</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => void logout()}
+                className="w-full min-h-[46px] px-4 rounded-xl border border-[#D6D1C4] hover:bg-[#F7F6F2] text-[#141413] font-semibold text-sm inline-flex items-center justify-center gap-2 transition-colors cursor-pointer"
+              >
+                <LogOut className="w-4 h-4" aria-hidden="true" />
+                <span>Se déconnecter</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  } else if (mode === 'firebase' && !isAdminUser && profileNotFound && !profile) {
+    // Gate 0 : Compte Firebase authentifié sans profil `express_drivers` — écran contrôlé (aucune auto-activation)
+    routeContent = <MissingDriverProfileGate />;
+  } else if (mode === 'firebase' && !isAdminUser && (!profile || profile.accountStatus === 'pending')) {
+    // Gate 1 : Livreur authentifié en attente de validation par JikJikoox Admin
+    routeContent = (
       <div className="min-h-screen bg-[#F7F6F2] flex items-center justify-center p-6">
         <div className="w-full max-w-md bg-white border border-[#E5E2D9] rounded-2xl overflow-hidden shadow-2xs">
           <BrandAccentBar />
@@ -186,11 +260,9 @@ function CourierExpressRouter() {
         </div>
       </div>
     );
-  }
-
-  // Gate 2 : Livreur suspendu ou désactivé — blocage strict
-  if (mode === 'firebase' && !isAdminUser && profile && profile.accountStatus !== 'active') {
-    return (
+  } else if (mode === 'firebase' && !isAdminUser && profile && profile.accountStatus !== 'active') {
+    // Gate 2 : Livreur suspendu ou désactivé — blocage strict
+    routeContent = (
       <div className="min-h-screen bg-[#F7F6F2] flex items-center justify-center p-6">
         <div className="w-full max-w-md bg-white border border-[#E5E2D9] rounded-2xl overflow-hidden shadow-2xs">
           <BrandAccentBar />
@@ -224,74 +296,64 @@ function CourierExpressRouter() {
         </div>
       </div>
     );
+  } else {
+    routeContent = (
+      <Suspense
+        fallback={
+          <div className="min-h-screen bg-[#F7F6F2] flex items-center justify-center p-6">
+            <BrandLogo size="lg" showWordmark />
+          </div>
+        }
+      >
+        <AppShell
+          activeTab={activeTab}
+          onSelectTab={handleSelectTab}
+          pageTitle={pageTitle}
+          showBack={Boolean(selectedMissionId)}
+          onBack={handleBackFromMission}
+        >
+          <Suspense
+            fallback={
+              <div className="space-y-4 py-4" aria-busy="true" aria-label="Chargement de la page">
+                <div className="h-32 rounded-2xl bg-white border border-[#E5E2D9] animate-pulse" />
+                <div className="h-64 rounded-2xl bg-white border border-[#E5E2D9] animate-pulse" />
+              </div>
+            }
+          >
+            {selectedMissionId ? (
+              <MissionDetailPage
+                missionId={selectedMissionId}
+                onBack={handleBackFromMission}
+              />
+            ) : activeTab === 'dashboard' ? (
+              <DashboardPage
+                onSelectMission={handleSelectMission}
+                onNavigateTab={handleSelectTab}
+              />
+            ) : activeTab === 'missions' ? (
+              <MissionsPage onSelectMission={handleSelectMission} />
+            ) : activeTab === 'fleet' ? (
+              <AdminFleetMapPage />
+            ) : activeTab === 'drivers' ? (
+              <AdminDriversPage />
+            ) : activeTab === 'history' ? (
+              <HistoryPage onSelectMission={handleSelectMission} />
+            ) : activeTab === 'notifications' ? (
+              <NotificationsPage onSelectMission={handleSelectMission} />
+            ) : (
+              <ProfilePage />
+            )}
+          </Suspense>
+        </AppShell>
+      </Suspense>
+    );
   }
 
-  const handleSelectTab = (tab: AppTab) => {
-    setSelectedMissionId(null);
-    setActiveTab(tab);
-    window.scrollTo({ top: 0, behavior: 'instant' });
-  };
-
-  const handleSelectMission = (missionId: string) => {
-    setSelectedMissionId(missionId);
-    window.scrollTo({ top: 0, behavior: 'instant' });
-  };
-
-  const handleBackFromMission = () => {
-    setSelectedMissionId(null);
-  };
-
-  const pageTitle = selectedMissionId ? 'Détail de la mission' : TAB_TITLES[activeTab];
-
   return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen bg-[#F7F6F2] flex items-center justify-center p-6">
-          <BrandLogo size="lg" showWordmark />
-        </div>
-      }
-    >
-      <AppShell
-        activeTab={activeTab}
-        onSelectTab={handleSelectTab}
-        pageTitle={pageTitle}
-        showBack={Boolean(selectedMissionId)}
-        onBack={handleBackFromMission}
-      >
-        <Suspense
-          fallback={
-            <div className="space-y-4 py-4" aria-busy="true" aria-label="Chargement de la page">
-              <div className="h-32 rounded-2xl bg-white border border-[#E5E2D9] animate-pulse" />
-              <div className="h-64 rounded-2xl bg-white border border-[#E5E2D9] animate-pulse" />
-            </div>
-          }
-        >
-          {selectedMissionId ? (
-            <MissionDetailPage
-              missionId={selectedMissionId}
-              onBack={handleBackFromMission}
-            />
-          ) : activeTab === 'dashboard' ? (
-            <DashboardPage
-              onSelectMission={handleSelectMission}
-              onNavigateTab={handleSelectTab}
-            />
-          ) : activeTab === 'missions' ? (
-            <MissionsPage onSelectMission={handleSelectMission} />
-          ) : activeTab === 'fleet' ? (
-            <AdminFleetMapPage />
-          ) : activeTab === 'drivers' ? (
-            <AdminDriversPage />
-          ) : activeTab === 'history' ? (
-            <HistoryPage onSelectMission={handleSelectMission} />
-          ) : activeTab === 'notifications' ? (
-            <NotificationsPage onSelectMission={handleSelectMission} />
-          ) : (
-            <ProfilePage />
-          )}
-        </Suspense>
-      </AppShell>
-    </Suspense>
+    <>
+      <GlobalNetworkAlert />
+      {routeContent}
+    </>
   );
 }
 

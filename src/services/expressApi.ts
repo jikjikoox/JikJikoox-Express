@@ -32,12 +32,14 @@ import type { AccountStatus, MissionStatus, ProofSubmission, VehicleType } from 
 export class ExpressApiError extends Error {
   readonly code: string;
   readonly status: number;
+  readonly endpoint?: string;
 
-  constructor(code: string, message: string, status: number) {
+  constructor(code: string, message: string, status: number, endpoint?: string) {
     super(message);
     this.name = 'ExpressApiError';
     this.code = code;
     this.status = status;
+    this.endpoint = endpoint;
   }
 }
 
@@ -100,21 +102,24 @@ export function createExpressApiClient(options: ExpressApiOptions = {}) {
       throw new ExpressApiError(
         'BACKEND_NOT_CONFIGURED',
         'L’URL des Edge Functions Supabase n’est pas encore configurée.',
-        503
+        503,
+        functionName
       );
     }
     if (!idToken) {
       throw new ExpressApiError(
         'TOKEN_MISSING',
         'Session Firebase requise pour contacter le serveur.',
-        401
+        401,
+        functionName
       );
     }
     if (typeof navigator !== 'undefined' && navigator.onLine === false) {
       throw new ExpressApiError(
         'OFFLINE_NO_CONNECTION',
         FRIENDLY_ERROR_MESSAGES.OFFLINE_NO_CONNECTION,
-        0
+        0,
+        functionName
       );
     }
 
@@ -164,7 +169,8 @@ export function createExpressApiClient(options: ExpressApiOptions = {}) {
         lastError = new ExpressApiError(
           errCode,
           translateErrorMessage(errCode, rawMsg),
-          res.status
+          res.status,
+          functionName
         );
 
         const isTransient = res.status === 502 || res.status === 503 || res.status === 504;
@@ -183,7 +189,8 @@ export function createExpressApiClient(options: ExpressApiOptions = {}) {
             isAbort ? 'REQUEST_TIMEOUT' : 'NETWORK_UNREACHABLE',
             'Serveur inaccessible.'
           ),
-          0
+          0,
+          functionName
         );
         if (attempt === attemptsAllowed) {
           throw lastError;
@@ -193,7 +200,12 @@ export function createExpressApiClient(options: ExpressApiOptions = {}) {
 
     throw (
       lastError ??
-      new ExpressApiError('NETWORK_UNREACHABLE', 'Serveur JikJikoox inaccessible.', 0)
+      new ExpressApiError(
+        'NETWORK_UNREACHABLE',
+        'Serveur JikJikoox inaccessible.',
+        0,
+        functionName
+      )
     );
   }
 
