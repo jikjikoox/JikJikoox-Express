@@ -232,14 +232,6 @@ function CourierExpressRouter() {
               </button>
               <button
                 type="button"
-                onClick={enterDemoMode}
-                className="w-full min-h-[46px] px-4 rounded-xl bg-[#F7F6F2] hover:bg-[#EFECE4] border border-[#D6D1C4] text-[#141413] font-semibold text-sm inline-flex items-center justify-center gap-2 transition-colors cursor-pointer"
-              >
-                <Truck className="w-4 h-4 text-[#0E6E2D]" aria-hidden="true" />
-                <span>Explorer le mode démonstration local</span>
-              </button>
-              <button
-                type="button"
                 onClick={() => void logout()}
                 className="w-full min-h-[46px] px-4 rounded-xl border border-[#D6D1C4] hover:bg-[#F7F6F2] text-[#141413] font-semibold text-sm inline-flex items-center justify-center gap-2 transition-colors cursor-pointer"
               >
