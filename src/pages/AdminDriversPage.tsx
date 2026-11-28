@@ -414,7 +414,7 @@ export function AdminDriversPage() {
               driver.engagement_status === 'accepted' &&
               Boolean(driver.identity_verified_at) &&
               Boolean(driver.address_verified_at) &&
-              Boolean(driver.insurance_expires_at) &&
+              typeof driver.insurance_expires_at === 'string' &&
               driver.insurance_expires_at >= new Date().toISOString().slice(0, 10)
             );
             const createdDate = new Date(driver.created_at).toLocaleDateString('fr-SN', {
