@@ -69,6 +69,7 @@ function CourierExpressRouter() {
   const [activeTab, setActiveTab] = useState<AppTab>('dashboard');
   const [selectedMissionId, setSelectedMissionId] = useState<string | null>(null);
   const [rechecking, setRechecking] = useState(false);
+  const [showApplicationForm, setShowApplicationForm] = useState(false);
 
   // Ouverture directe d'une mission lors du clic sur une notification push FCM (`/?mission=...`)
   useEffect(() => {
@@ -173,8 +174,8 @@ function CourierExpressRouter() {
     // Gate 0 : Compte Firebase authentifié sans profil `express_drivers` — écran contrôlé (aucune auto-activation)
     routeContent = <MissingDriverProfileGate />;
   } else if (mode === 'firebase' && !isAdminUser && (!profile || profile.accountStatus === 'pending')) {
-    // Gate 1 : Livreur authentifié en attente de validation par JikJikoox Admin
-    routeContent = (
+    // Gate 1 : candidat en attente; autoriser la reprise/complétion du dossier, sans accès aux missions.
+    routeContent = showApplicationForm ? <CourierApplicationPage /> : (
       <div className="min-h-screen bg-[#F7F6F2] flex items-center justify-center p-6">
         <div className="w-full max-w-md bg-white border border-[#E5E2D9] rounded-2xl overflow-hidden shadow-2xs">
           <BrandAccentBar />
@@ -215,6 +216,13 @@ function CourierExpressRouter() {
             )}
 
             <div className="space-y-2.5">
+              <button
+                type="button"
+                onClick={() => setShowApplicationForm(true)}
+                className="w-full min-h-[46px] px-4 rounded-xl border border-[#0E6E2D] bg-[#ECF7EE] text-[#0E6E2D] font-semibold text-sm"
+              >
+                Compléter ou ajouter mes documents
+              </button>
               <button
                 type="button"
                 disabled={rechecking}
