@@ -61,7 +61,7 @@ export async function handleCourierTrust(req: Request): Promise<Response> {
    if(!listing.ok) return errorResponse('UPLOAD_NOT_FOUND','Fichier non confirmé dans le stockage privé.',400,cors);
    const found=await listing.json();
    if(!Array.isArray(found)||!found.some((f:any)=>f.name===path.split('/').pop())) return errorResponse('UPLOAD_NOT_FOUND','Fichier non confirmé dans le stockage privé.',400,cors);
-   const inserted=await supabaseRest<any[]>(env,'/rest/v1/express_driver_documents',{method:'POST',headers:{Prefer:'return=representation'},body:json({driver_id:driver.id,firebase_uid:user.uid,document_type:type,storage_path:path,mime_type:mime,file_size_bytes:size,original_file_name:String(body.fileName||'').slice(0,180)||null,review_status:'pending'})});
+   const inserted=await supabaseRest<any[]>(env,'/rest/v1/express_driver_documents',{method:'POST',headers:{Prefer:'return=representation'},body:json({driver_id:driver.id,firebase_uid:user.uid,document_type:type,storage_path:path,mime_type:mime,file_size_bytes:size,original_file_name:String(body.fileName||'').slice(0,180)||null,review_status:'pending',issued_at:body.issuedAt||null,expires_at:body.expiresAt||null})});
    if(!inserted.ok||!inserted.data?.[0]) return errorResponse('DOCUMENT_SAVE_FAILED','Impossible d’enregistrer le document.',500,cors);
    return jsonResponse({ok:true,document:inserted.data[0]},201,cors);
   }
@@ -73,11 +73,27 @@ export async function handleCourierTrust(req: Request): Promise<Response> {
    const types=new Set((docs.data||[]).map(x=>x.document_type));
    const missing=required.filter(x=>!types.has(x));
    if(missing.length) return errorResponse('DOCUMENTS_MISSING',`Documents manquants : ${missing.join(', ')}`,400,cors);
-   const patch={residence_address:String(body.residenceAddress||'').trim().slice(0,300),residence_city:String(body.residenceCity||'').trim().slice(0,100),residence_region:String(body.residenceRegion||'').trim().slice(0,100),emergency_contact_name:String(body.emergencyContactName||'').trim().slice(0,120),emergency_contact_relationship:String(body.emergencyContactRelationship||'').trim().slice(0,40),emergency_contact_phone:String(body.emergencyContactPhone||'').trim().slice(0,24),insurance_expires_at:String(body.insuranceExpiresAt||''),personal_data_consent_at:new Date().toISOString(),verification_status:'submitted',updated_at:new Date().toISOString()};
+   const patch={vehicle_plate:String(body.vehiclePlate||'').trim().slice(0,24),residence_address:String(body.residenceAddress||'').trim().slice(0,300),residence_city:String(body.residenceCity||'').trim().slice(0,100),residence_region:String(body.residenceRegion||'').trim().slice(0,100),emergency_contact_name:String(body.emergencyContactName||'').trim().slice(0,120),emergency_contact_relationship:String(body.emergencyContactRelationship||'').trim().slice(0,40),emergency_contact_phone:String(body.emergencyContactPhone||'').trim().slice(0,24),insurance_expires_at:String(body.insuranceExpiresAt||''),personal_data_consent_at:new Date().toISOString(),verification_status:'submitted',updated_at:new Date().toISOString()};
    if(!patch.residenceAddress||!patch.residenceCity||!patch.emergency_contact_name||!/^\+?[0-9][0-9 .()-]{6,22}$/.test(patch.emergency_contact_phone)||!/^\d{4}-\d{2}-\d{2}$/.test(patch.insurance_expires_at)||patch.insurance_expires_at<new Date().toISOString().slice(0,10)) return errorResponse('INVALID_APPLICATION','Adresse, contact de secours ou date d’assurance invalide.',400,cors);
    const updated=await supabaseRest<any[]>(env,`/rest/v1/express_drivers?id=eq.${encodeURIComponent(driver.id)}`,{method:'PATCH',headers:{Prefer:'return=representation'},body:json(patch)});
    if(!updated.ok||!updated.data?.[0]) return errorResponse('APPLICATION_SAVE_FAILED','Impossible de soumettre le dossier.',500,cors);
    return jsonResponse({ok:true,profile:updated.data[0]},200,cors);
+  }
+  if(action==='approve-application') {
+   const admin=assertAuthorizedAdmin(await fetchActiveAdminByFirebaseUid(env,user.uid,user.email));
+   const driverId=String(body.driverId||'');
+   const identityConfirmed=body.identityConfirmed===true, addressConfirmed=body.addressConfirmed===true, engagementAccepted=body.engagementAccepted===true;
+   if(!driverId||!identityConfirmed||!addressConfirmed||!engagementAccepted) return errorResponse('MANUAL_CHECKS_REQUIRED','Confirmez identité, adresse et acceptation de l’engagement avant validation.',400,cors);
+   const target=await supabaseRest<any[]>(env,`/rest/v1/express_drivers?id=eq.${encodeURIComponent(driverId)}&select=id,insurance_expires_at,verification_status`);
+   if(!target.ok||!target.data?.[0]) return errorResponse('DRIVER_NOT_FOUND','Candidat introuvable.',404,cors);
+   const docs=await supabaseRest<any[]>(env,`/rest/v1/express_driver_documents?driver_id=eq.${encodeURIComponent(driverId)}&select=document_type,review_status`);
+   const required=['identity_front','identity_back','license_front','license_back','vehicle_registration_front','vehicle_registration_back','insurance_certificate','profile_photo'];
+   const approved=new Set((docs.data||[]).filter(x=>x.review_status==='approved').map(x=>x.document_type));
+   if(!required.every(x=>approved.has(x))) return errorResponse('DOCUMENTS_NOT_APPROVED','Toutes les pièces obligatoires doivent être approuvées individuellement.',409,cors);
+   if(!target.data[0].insurance_expires_at||target.data[0].insurance_expires_at<new Date().toISOString().slice(0,10)) return errorResponse('INSURANCE_EXPIRED','Assurance absente ou expirée.',409,cors);
+   const updated=await supabaseRest<any[]>(env,`/rest/v1/express_drivers?id=eq.${encodeURIComponent(driverId)}`,{method:'PATCH',headers:{Prefer:'return=representation'},body:json({verification_status:'verified',engagement_status:'accepted',identity_verified_at:new Date().toISOString(),address_verified_at:new Date().toISOString(),engagement_accepted_at:new Date().toISOString(),updated_at:new Date().toISOString()})});
+   if(!updated.ok||!updated.data?.[0]) return errorResponse('APPLICATION_APPROVAL_FAILED','Validation du dossier impossible.',500,cors);
+   return jsonResponse({ok:true,driver:updated.data[0],reviewedBy:admin.email},200,cors);
   }
   if(action==='review-document') {
    const admin=assertAuthorizedAdmin(await fetchActiveAdminByFirebaseUid(env,user.uid,user.email));
