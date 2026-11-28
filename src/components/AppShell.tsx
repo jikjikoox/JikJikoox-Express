@@ -64,6 +64,7 @@ export function AppShell({
         BASE_NAV_ITEMS[2],
         BASE_NAV_ITEMS[3],
         BASE_NAV_ITEMS[4],
+        BASE_NAV_ITEMS[5],
       ]
     : BASE_NAV_ITEMS;
   const mobileNavItems = BASE_NAV_ITEMS;
