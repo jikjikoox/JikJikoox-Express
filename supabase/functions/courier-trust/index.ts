@@ -67,17 +67,17 @@ export async function handleCourierTrust(req: Request): Promise<Response> {
   }
   if(action==='submit-application') {
    if(!driver||driver.account_status!=='pending') return errorResponse('DRIVER_PENDING','Profil candidat en attente requis.',403,cors);
-   const required=['identity_front','identity_back','license_front','license_back','vehicle_registration_front','vehicle_registration_back','insurance_certificate','profile_photo'];
    const docs=await supabaseRest<any[]>(env,`/rest/v1/express_driver_documents?driver_id=eq.${encodeURIComponent(driver.id)}&select=document_type,review_status`);
    if(!docs.ok) return errorResponse('DOCUMENTS_FETCH_FAILED','Impossible de contrôler les pièces.',500,cors);
-   const types=new Set((docs.data||[]).map(x=>x.document_type));
-   const missing=required.filter(x=>!types.has(x));
-   if(missing.length) return errorResponse('DOCUMENTS_MISSING',`Documents manquants : ${missing.join(', ')}`,400,cors);
-   const patch={vehicle_plate:String(body.vehiclePlate||'').trim().slice(0,24),residence_address:String(body.residenceAddress||'').trim().slice(0,300),residence_city:String(body.residenceCity||'').trim().slice(0,100),residence_region:String(body.residenceRegion||'').trim().slice(0,100),emergency_contact_name:String(body.emergencyContactName||'').trim().slice(0,120),emergency_contact_relationship:String(body.emergencyContactRelationship||'').trim().slice(0,40),emergency_contact_phone:String(body.emergencyContactPhone||'').trim().slice(0,24),insurance_expires_at:String(body.insuranceExpiresAt||''),personal_data_consent_at:new Date().toISOString(),verification_status:'submitted',updated_at:new Date().toISOString()};
-   if(!patch.residence_address||!patch.residence_city||!patch.emergency_contact_name||!/^\+?[0-9][0-9 .()-]{6,22}$/.test(patch.emergency_contact_phone)||!/^\d{4}-\d{2}-\d{2}$/.test(patch.insurance_expires_at)||patch.insurance_expires_at<new Date().toISOString().slice(0,10)) return errorResponse('INVALID_APPLICATION','Adresse, contact de secours ou date d’assurance invalide.',400,cors);
+   const submittedTypes=new Set((docs.data||[]).map(x=>x.document_type));
+   const requiredForOperationalApproval=['identity_front','identity_back','license_front','license_back','vehicle_registration_front','vehicle_registration_back','insurance_certificate','profile_photo'];
+   const missingDocuments=requiredForOperationalApproval.filter(x=>!submittedTypes.has(x));
+   const patch={vehicle_plate:String(body.vehiclePlate||'').trim().slice(0,24),residence_address:String(body.residenceAddress||'').trim().slice(0,300),residence_city:String(body.residenceCity||'').trim().slice(0,100),residence_region:String(body.residenceRegion||'').trim().slice(0,100),emergency_contact_name:String(body.emergencyContactName||'').trim().slice(0,120),emergency_contact_relationship:String(body.emergencyContactRelationship||'').trim().slice(0,40),emergency_contact_phone:String(body.emergencyContactPhone||'').trim().slice(0,24),insurance_expires_at:body.insuranceExpiresAt?String(body.insuranceExpiresAt):null,personal_data_consent_at:new Date().toISOString(),verification_status:'submitted',updated_at:new Date().toISOString()};
+   if(!patch.residence_address||!patch.residence_city||!patch.emergency_contact_name||!/^\+?[0-9][0-9 .()-]{6,22}$/.test(patch.emergency_contact_phone)) return errorResponse('INVALID_APPLICATION','Adresse ou contact de secours invalide.',400,cors);
+   if(submittedTypes.has('insurance_certificate') && (!/^\d{4}-\d{2}-\d{2}$/.test(String(body.insuranceExpiresAt||'')) || String(body.insuranceExpiresAt)<new Date().toISOString().slice(0,10))) return errorResponse('INVALID_INSURANCE_DATES','Les dates d’assurance sont requises et doivent être valides lorsque le certificat est joint.',400,cors);
    const updated=await supabaseRest<any[]>(env,`/rest/v1/express_drivers?id=eq.${encodeURIComponent(driver.id)}`,{method:'PATCH',headers:{Prefer:'return=representation'},body:json(patch)});
    if(!updated.ok||!updated.data?.[0]) return errorResponse('APPLICATION_SAVE_FAILED','Impossible de soumettre le dossier.',500,cors);
-   return jsonResponse({ok:true,profile:updated.data[0]},200,cors);
+   return jsonResponse({ok:true,profile:updated.data[0],missingDocuments},200,cors);
   }
   if(action==='approve-application') {
    const admin=assertAuthorizedAdmin(await fetchActiveAdminByFirebaseUid(env,user.uid,user.email));
