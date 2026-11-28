@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
-import { Clock, LogOut, RefreshCw, ShieldAlert, Truck, WifiOff } from 'lucide-react';
+import { Clock, LogOut, RefreshCw, ShieldAlert, WifiOff } from 'lucide-react';
 import { BrandAccentBar, BrandLogo } from './components/BrandLogo';
 import { CourierApplicationPage } from './pages/CourierApplicationPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -64,7 +64,6 @@ function CourierExpressRouter() {
     retryingNetworkSync,
     refreshBackendData,
     retryCriticalNetworkSync,
-    enterDemoMode,
     logout,
   } = useCourierApp();
   const [activeTab, setActiveTab] = useState<AppTab>('dashboard');
@@ -156,14 +155,6 @@ function CourierExpressRouter() {
                 <span>
                   {retryingNetworkSync ? 'Reconnexion en cours...' : 'Réessayer le chargement'}
                 </span>
-              </button>
-              <button
-                type="button"
-                onClick={enterDemoMode}
-                className="w-full min-h-[46px] px-4 rounded-xl bg-[#F7F6F2] hover:bg-[#EFECE4] border border-[#D6D1C4] text-[#141413] font-semibold text-sm inline-flex items-center justify-center gap-2 transition-colors cursor-pointer"
-              >
-                <Truck className="w-4 h-4 text-[#0E6E2D]" aria-hidden="true" />
-                <span>Explorer le mode démonstration local</span>
               </button>
               <button
                 type="button"
