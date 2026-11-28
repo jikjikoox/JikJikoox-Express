@@ -22,14 +22,14 @@ const MAX_SIZE=10*1024*1024;
 const MIME=['image/jpeg','image/png','image/webp','application/pdf'];
 const field='mt-1 w-full min-h-11 rounded-xl border border-[#D6D1C4] bg-white px-3 text-sm text-[#141413]';
 export function CourierApplicationPage(){
- const {firebaseUser,completeCourierRegistration,logout}=useCourierApp();
+ const {firebaseUser,profile,completeCourierRegistration,logout}=useCourierApp();
  const display=(firebaseUser?.displayName||'').trim().split(/\s+/);
- const [firstName,setFirstName]=useState(display[0]||'');
- const [lastName,setLastName]=useState(display.slice(1).join(' '));
- const [phone,setPhone]=useState('+221 ');
- const [vehicleType,setVehicleType]=useState<VehicleType>('scooter');
- const [workZone,setWorkZone]=useState(DAKAR_ZONES[0]);
- const [plate,setPlate]=useState('');
+ const [firstName,setFirstName]=useState(profile?.firstName||display[0]||'');
+ const [lastName,setLastName]=useState(profile?.lastName||display.slice(1).join(' '));
+ const [phone,setPhone]=useState(profile?.phone||'+221 ');
+ const [vehicleType,setVehicleType]=useState<VehicleType>(profile?.vehicleType||'scooter');
+ const [workZone,setWorkZone]=useState(profile?.workZone||DAKAR_ZONES[0]);
+ const [plate,setPlate]=useState(profile?.vehiclePlate||'');
  const [address,setAddress]=useState('');
  const [city,setCity]=useState('Dakar');
  const [region,setRegion]=useState('Dakar');
@@ -83,7 +83,7 @@ export function CourierApplicationPage(){
  }
  return <div className="min-h-screen bg-[#F7F6F2] px-4 py-6 sm:py-10"><div className="mx-auto max-w-2xl overflow-hidden rounded-2xl border border-[#E5E2D9] bg-white shadow-sm"><BrandAccentBar/><div className="space-y-6 p-5 sm:p-8">
   <div className="flex justify-center"><BrandLogo size="md" showWordmark/></div>
-  <div className="text-center"><div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-[#EAF4EC] text-[#0E6E2D]"><ShieldCheck/></div><h1 className="text-2xl font-extrabold text-[#141413]">Candidature livreur JikJikoox Express</h1><p className="mt-2 text-sm leading-6 text-[#5A5851]">La confiance fait notre différence. Votre dossier sera vérifié par notre équipe avant toute activation.</p><p className="mt-1 text-xs text-[#77736A]">{firebaseUser?.email}</p></div>
+  <div className="text-center"><div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-[#EAF4EC] text-[#0E6E2D]"><ShieldCheck/></div><h1 className="text-2xl font-extrabold text-[#141413]">{profile?'Compléter mon dossier livreur':'Candidature livreur JikJikoox Express'}</h1><p className="mt-2 text-sm leading-6 text-[#5A5851]">La confiance fait notre différence. Vous pouvez compléter votre dossier progressivement. Les missions restent verrouillées jusqu’aux vérifications et validations requises.</p><p className="mt-1 text-xs text-[#77736A]">{firebaseUser?.email}</p></div>
   <form onSubmit={submit} className="space-y-6">
    <section className="space-y-3"><h2 className="font-bold text-[#141413]">1. Identité et contact</h2><div className="grid gap-3 sm:grid-cols-2"><label className="text-xs font-semibold">Prénom<input className={field} required minLength={2} value={firstName} onChange={e=>setFirstName(e.target.value)}/></label><label className="text-xs font-semibold">Nom<input className={field} required minLength={2} value={lastName} onChange={e=>setLastName(e.target.value)}/></label><label className="text-xs font-semibold">Téléphone principal<input className={field} required type="tel" value={phone} onChange={e=>setPhone(e.target.value)}/></label><label className="text-xs font-semibold">Véhicule<select className={field} value={vehicleType} onChange={e=>setVehicleType(e.target.value as VehicleType)}>{(Object.keys(VEHICLE_LABELS) as VehicleType[]).map(k=><option key={k} value={k}>{VEHICLE_LABELS[k]}</option>)}</select></label><label className="text-xs font-semibold">Immatriculation<input className={field} required value={plate} onChange={e=>setPlate(e.target.value)} placeholder="DK-0000-XX"/></label><label className="text-xs font-semibold">Zone de travail<select className={field} value={workZone} onChange={e=>setWorkZone(e.target.value)}>{DAKAR_ZONES.map(z=><option key={z}>{z}</option>)}</select></label></div></section>
    <section className="space-y-3"><h2 className="font-bold text-[#141413]">2. Adresse de résidence</h2><label className="block text-xs font-semibold">Adresse complète<input className={field} required value={address} onChange={e=>setAddress(e.target.value)} placeholder="Quartier, rue, repère"/></label><div className="grid gap-3 sm:grid-cols-2"><label className="text-xs font-semibold">Ville<input className={field} required value={city} onChange={e=>setCity(e.target.value)}/></label><label className="text-xs font-semibold">Région<input className={field} required value={region} onChange={e=>setRegion(e.target.value)}/></label></div></section>
