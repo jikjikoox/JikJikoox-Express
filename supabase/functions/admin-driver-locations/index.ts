@@ -66,7 +66,7 @@ export async function handleAdminDriverLocationsRequest(req: Request): Promise<R
   try {
     const token = extractBearerToken(req.headers.get('authorization'));
     const verified = await verifyFirebaseIdToken(token, { projectId: env.firebaseProjectId });
-    assertAuthorizedAdmin(await fetchActiveAdminByFirebaseUid(env, verified.uid));
+    assertAuthorizedAdmin(await fetchActiveAdminByFirebaseUid(env, verified.uid, verified.email));
 
     const [locRes, driversRes, deliveriesRes] = await Promise.all([
       supabaseRest<LastLocationRow[]>(
