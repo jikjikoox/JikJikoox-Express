@@ -43,7 +43,7 @@ export async function handleAdminDriversRequest(req: Request): Promise<Response>
       requireVerifiedEmail: true,
     });
 
-    const admin = await fetchActiveAdminByFirebaseUid(env, verified.uid);
+    const admin = await fetchActiveAdminByFirebaseUid(env, verified.uid, verified.email);
     assertAuthorizedAdmin(admin);
 
     if (req.method === 'GET') {
