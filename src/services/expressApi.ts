@@ -200,6 +200,19 @@ export function createExpressApiClient(options: ExpressApiOptions = {}) {
   return {
     isConfigured: () => Boolean(baseUrl) && (options.baseUrl ? true : isSupabaseBackendConfigured()),
 
+    fetchAdminProfile(idToken: string) {
+      return request<{
+        ok: true;
+        isAdmin: true;
+        role: 'admin' | 'super_admin';
+        email: string;
+        displayName: string | null;
+      }>('express-admin-profile', idToken, {
+        method: 'GET',
+        retryable: true,
+      });
+    },
+
     fetchDriverProfile(idToken: string) {
       return request<DriverProfileEdgeResponse>('driver-profile', idToken, {
         method: 'GET',
