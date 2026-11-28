@@ -7,6 +7,11 @@ const MAX_BYTES = 10 * 1024 * 1024;
 const TYPES = new Set(['image/jpeg','image/png','image/webp','application/pdf']);
 const DOCS = new Set(['identity_front','identity_back','license_front','license_back','vehicle_registration_front','vehicle_registration_back','insurance_certificate','profile_photo','address_proof']);
 const json = (v: unknown) => JSON.stringify(v);
+const isIsoDate = (value: unknown): value is string => {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(value + 'T00:00:00.000Z');
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+};
 async function storageRequest(env: ReturnType<typeof readDenoEnv>, path: string, init: RequestInit = {}) {
   const headers = new Headers(init.headers);
   headers.set('apikey', env.serviceRoleKey); headers.set('Authorization', `Bearer ${env.serviceRoleKey}`);
@@ -56,7 +61,9 @@ export async function handleCourierTrust(req: Request): Promise<Response> {
   if(action==='confirm-upload') {
    if(!driver || driver.account_status!=='pending') return errorResponse('DRIVER_PENDING','Profil candidat en attente requis.',403,cors);
    const path=String(body.storagePath||''), type=String(body.documentType||''), mime=String(body.mimeType||''), size=Number(body.fileSizeBytes||0);
+   const issuedAt=body.issuedAt, expiresAt=body.expiresAt;
    if(!path.startsWith(`${user.uid}/`)||!DOCS.has(type)||!TYPES.has(mime)||!Number.isInteger(size)||size<1||size>MAX_BYTES) return errorResponse('INVALID_DOCUMENT','Document invalide.',400,cors);
+   if(type==='insurance_certificate' && (!isIsoDate(issuedAt)||!isIsoDate(expiresAt)||issuedAt>new Date().toISOString().slice(0,10)||expiresAt<new Date().toISOString().slice(0,10)||expiresAt<issuedAt)) return errorResponse('INVALID_INSURANCE_DATES','Les dates d’émission et d’expiration de l’assurance sont obligatoires et doivent être cohérentes.',400,cors);
    const listing=await storageRequest(env,`/object/list/${BUCKET}`,{method:'POST',body:json({prefix:user.uid,search:path.split('/').pop(),limit:5})});
    if(!listing.ok) return errorResponse('UPLOAD_NOT_FOUND','Fichier non confirmé dans le stockage privé.',400,cors);
    const found=await listing.json();
@@ -68,13 +75,15 @@ export async function handleCourierTrust(req: Request): Promise<Response> {
   if(action==='submit-application') {
    if(!driver||driver.account_status!=='pending') return errorResponse('DRIVER_PENDING','Profil candidat en attente requis.',403,cors);
    const required=['identity_front','identity_back','license_front','license_back','vehicle_registration_front','vehicle_registration_back','insurance_certificate','profile_photo'];
-   const docs=await supabaseRest<any[]>(env,`/rest/v1/express_driver_documents?driver_id=eq.${encodeURIComponent(driver.id)}&select=document_type,review_status`);
+   const docs=await supabaseRest<any[]>(env,`/rest/v1/express_driver_documents?driver_id=eq.${encodeURIComponent(driver.id)}&select=document_type,review_status,issued_at,expires_at`);
    if(!docs.ok) return errorResponse('DOCUMENTS_FETCH_FAILED','Impossible de contrôler les pièces.',500,cors);
    const types=new Set((docs.data||[]).map(x=>x.document_type));
    const missing=required.filter(x=>!types.has(x));
    if(missing.length) return errorResponse('DOCUMENTS_MISSING',`Documents manquants : ${missing.join(', ')}`,400,cors);
    const patch={vehicle_plate:String(body.vehiclePlate||'').trim().slice(0,24),residence_address:String(body.residenceAddress||'').trim().slice(0,300),residence_city:String(body.residenceCity||'').trim().slice(0,100),residence_region:String(body.residenceRegion||'').trim().slice(0,100),emergency_contact_name:String(body.emergencyContactName||'').trim().slice(0,120),emergency_contact_relationship:String(body.emergencyContactRelationship||'').trim().slice(0,40),emergency_contact_phone:String(body.emergencyContactPhone||'').trim().slice(0,24),insurance_expires_at:String(body.insuranceExpiresAt||''),personal_data_consent_at:new Date().toISOString(),verification_status:'submitted',updated_at:new Date().toISOString()};
-   if(!patch.residence_address||!patch.residence_city||!patch.emergency_contact_name||!/^\+?[0-9][0-9 .()-]{6,22}$/.test(patch.emergency_contact_phone)||!/^\d{4}-\d{2}-\d{2}$/.test(patch.insurance_expires_at)||patch.insurance_expires_at<new Date().toISOString().slice(0,10)) return errorResponse('INVALID_APPLICATION','Adresse, contact de secours ou date d’assurance invalide.',400,cors);
+   const insuranceDoc=(docs.data||[]).find(x=>x.document_type==='insurance_certificate');
+   const insuranceIssuedAt=body.insuranceIssuedAt;
+   if(!patch.residence_address||!patch.residence_city||!patch.emergency_contact_name||!patch.emergency_contact_relationship||!/^[+]?[0-9][0-9 .()-]{6,22}$/.test(patch.emergency_contact_phone)||!isIsoDate(insuranceIssuedAt)||!isIsoDate(patch.insurance_expires_at)||insuranceIssuedAt>new Date().toISOString().slice(0,10)||patch.insurance_expires_at<new Date().toISOString().slice(0,10)||patch.insurance_expires_at<insuranceIssuedAt||!insuranceDoc||insuranceDoc.issued_at!==insuranceIssuedAt||insuranceDoc.expires_at!==patch.insurance_expires_at) return errorResponse('INVALID_APPLICATION','Adresse, contact de secours (nom, lien et téléphone) ou dates d’assurance incohérentes.',400,cors);
    const updated=await supabaseRest<any[]>(env,`/rest/v1/express_drivers?id=eq.${encodeURIComponent(driver.id)}`,{method:'PATCH',headers:{Prefer:'return=representation'},body:json(patch)});
    if(!updated.ok||!updated.data?.[0]) return errorResponse('APPLICATION_SAVE_FAILED','Impossible de soumettre le dossier.',500,cors);
    return jsonResponse({ok:true,profile:updated.data[0]},200,cors);
@@ -84,13 +93,15 @@ export async function handleCourierTrust(req: Request): Promise<Response> {
    const driverId=String(body.driverId||'');
    const identityConfirmed=body.identityConfirmed===true, addressConfirmed=body.addressConfirmed===true, engagementAccepted=body.engagementAccepted===true;
    if(!driverId||!identityConfirmed||!addressConfirmed||!engagementAccepted) return errorResponse('MANUAL_CHECKS_REQUIRED','Confirmez identité, adresse et acceptation de l’engagement avant validation.',400,cors);
-   const target=await supabaseRest<any[]>(env,`/rest/v1/express_drivers?id=eq.${encodeURIComponent(driverId)}&select=id,insurance_expires_at,verification_status`);
+   const target=await supabaseRest<any[]>(env,`/rest/v1/express_drivers?id=eq.${encodeURIComponent(driverId)}&select=id,insurance_expires_at,verification_status,emergency_contact_relationship`);
    if(!target.ok||!target.data?.[0]) return errorResponse('DRIVER_NOT_FOUND','Candidat introuvable.',404,cors);
-   const docs=await supabaseRest<any[]>(env,`/rest/v1/express_driver_documents?driver_id=eq.${encodeURIComponent(driverId)}&select=document_type,review_status`);
+   const docs=await supabaseRest<any[]>(env,`/rest/v1/express_driver_documents?driver_id=eq.${encodeURIComponent(driverId)}&select=document_type,review_status,issued_at,expires_at`);
    const required=['identity_front','identity_back','license_front','license_back','vehicle_registration_front','vehicle_registration_back','insurance_certificate','profile_photo'];
    const approved=new Set((docs.data||[]).filter(x=>x.review_status==='approved').map(x=>x.document_type));
    if(!required.every(x=>approved.has(x))) return errorResponse('DOCUMENTS_NOT_APPROVED','Toutes les pièces obligatoires doivent être approuvées individuellement.',409,cors);
-   if(!target.data[0].insurance_expires_at||target.data[0].insurance_expires_at<new Date().toISOString().slice(0,10)) return errorResponse('INSURANCE_EXPIRED','Assurance absente ou expirée.',409,cors);
+   const insuranceDoc=(docs.data||[]).find(x=>x.document_type==='insurance_certificate'&&x.review_status==='approved');
+   const today=new Date().toISOString().slice(0,10);
+   if(!target.data[0].emergency_contact_relationship||!insuranceDoc||!isIsoDate(insuranceDoc.issued_at)||!isIsoDate(insuranceDoc.expires_at)||insuranceDoc.issued_at>today||insuranceDoc.expires_at<today||insuranceDoc.expires_at<insuranceDoc.issued_at||insuranceDoc.expires_at!==target.data[0].insurance_expires_at) return errorResponse('INSURANCE_OR_EMERGENCY_DATA_INVALID','Le lien du contact de secours et les dates d’émission/expiration de l’assurance doivent être vérifiés.',409,cors);
    const updated=await supabaseRest<any[]>(env,`/rest/v1/express_drivers?id=eq.${encodeURIComponent(driverId)}`,{method:'PATCH',headers:{Prefer:'return=representation'},body:json({verification_status:'verified',engagement_status:'accepted',identity_verified_at:new Date().toISOString(),address_verified_at:new Date().toISOString(),engagement_accepted_at:new Date().toISOString(),updated_at:new Date().toISOString()})});
    if(!updated.ok||!updated.data?.[0]) return errorResponse('APPLICATION_APPROVAL_FAILED','Validation du dossier impossible.',500,cors);
    return jsonResponse({ok:true,driver:updated.data[0],reviewedBy:admin.email},200,cors);
