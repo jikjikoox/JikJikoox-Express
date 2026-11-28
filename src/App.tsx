@@ -175,7 +175,7 @@ function CourierExpressRouter() {
     routeContent = <MissingDriverProfileGate />;
   } else if (mode === 'firebase' && !isAdminUser && (!profile || profile.accountStatus === 'pending')) {
     // Gate 1 : candidat en attente; autoriser la reprise/complétion du dossier, sans accès aux missions.
-    routeContent = showApplicationForm ? <CourierApplicationPage /> : (
+    routeContent = showApplicationForm ? <CourierApplicationPage onReturnToStatus={() => setShowApplicationForm(false)} /> : (
       <div className="min-h-screen bg-[#F7F6F2] flex items-center justify-center p-6">
         <div className="w-full max-w-md bg-white border border-[#E5E2D9] rounded-2xl overflow-hidden shadow-2xs">
           <BrandAccentBar />
