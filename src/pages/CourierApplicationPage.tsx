@@ -21,7 +21,8 @@ type DocKey = typeof DOCUMENTS[number]['key'];
 const MAX_SIZE=10*1024*1024;
 const MIME=['image/jpeg','image/png','image/webp','application/pdf'];
 const field='mt-1 w-full min-h-11 rounded-xl border border-[#D6D1C4] bg-white px-3 text-sm text-[#141413]';
-export function CourierApplicationPage(){
+interface CourierApplicationPageProps { onReturnToStatus?: () => void; }
+export function CourierApplicationPage({onReturnToStatus}:CourierApplicationPageProps){
  const {firebaseUser,profile,completeCourierRegistration,logout}=useCourierApp();
  const display=(firebaseUser?.displayName||'').trim().split(/\s+/);
  const [firstName,setFirstName]=useState(profile?.firstName||display[0]||'');
@@ -95,6 +96,7 @@ export function CourierApplicationPage(){
    {progress&&<p aria-live="polite" className="text-sm text-[#0E6E2D]">{progress}</p>}
    <button disabled={busy} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#0E6E2D] px-4 font-bold text-white disabled:opacity-60"><UploadCloud size={18}/>{busy?'Envoi sécurisé en cours…':'Soumettre mon dossier de candidature'}</button>
   </form>
+  {onReturnToStatus&&<button type="button" onClick={onReturnToStatus} className="flex w-full items-center justify-center rounded-xl border border-[#D6D1C4] py-3 text-sm font-semibold">Retour au statut de ma candidature</button>}
   <button onClick={()=>void logout()} className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#D6D1C4] py-3 text-sm font-semibold"><LogOut size={16}/>Se déconnecter</button>
  </div></div></div>;
 }
