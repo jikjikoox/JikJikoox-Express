@@ -21,7 +21,7 @@ Deno.serve(async (req:Request) => {
     return jsonResponse({ok:true,summary:{earnedXof:earned,approvedExpensesXof:approved,pendingExpensesXof:pending,estimatedNetXof:earned-approved},entries},200,cors);
    }
    if(!admin) return errorResponse('ADMIN_REQUIRED','Accès réservé aux administrateurs actifs.',403,cors); const rows=await supabaseRest<any[]>(env,'/rest/v1/express_driver_financial_entries?select=*&order=created_at.desc&limit=500');
-   if(!rows.ok) throw new Error('FINANCE_READ_FAILED'); return jsonResponse({ok:true,adminRole:admin.role,entries:rows.data||[]},200,cors);
+   if(!rows.ok) throw new Error('FINANCE_READ_FAILED'); return jsonResponse({ok:true,entries:rows.data||[]},200,cors);
   }
   if(req.method==='POST') {
    const authorized=assertAuthorizedActiveDriver(driver); const body=await req.json().catch(()=>null);
@@ -29,9 +29,9 @@ Deno.serve(async (req:Request) => {
    const amount=Number(body.amount), category=String(body.category||''), description=typeof body.description==='string'?body.description.trim().slice(0,500):'';
    if(!Number.isFinite(amount)||amount<=0||amount>1000000||!EXPENSE_CATEGORIES.includes(category)) return errorResponse('INVALID_EXPENSE','Montant ou catégorie invalide.',400,cors);
    const key=String(req.headers.get('x-idempotency-key')||body.idempotencyKey||'').trim(); if(key.length<8||key.length>120) return errorResponse('IDEMPOTENCY_REQUIRED','Clé d’envoi requise.',400,cors);
-   const result=await supabaseRest<any[]>(env,'/rest/v1/express_driver_financial_entries?select=id,driver_id,entry_type,category,amount,status,created_at',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({driver_id:authorized.id,entry_type:'expense',category,amount,currency:'XOF',description,receipt_storage_path:null,status:'pending',source_key:'expense:'+authorized.id+':'+key,submitted_by_firebase_uid:user.uid})});
+   const result=await supabaseRest<any[]>(env,'/rest/v1/express_driver_financial_entries?select=id,driver_id,entry_type,category,amount,status,created_at',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({driver_id:authorized.id,entry_type:'expense',category,amount,currency:'XOF',description,receipt_storage_path:null,status:'posted',posted_at:new Date().toISOString(),source_key:'expense:'+authorized.id+':'+key,submitted_by_firebase_uid:user.uid})});
    if(!result.ok) {if(result.status===409) return errorResponse('DUPLICATE_SUBMISSION','Cette dépense a déjà été envoyée.',409,cors); throw new Error('FINANCE_INSERT_FAILED');}
-   return jsonResponse({ok:true,entry:result.data?.[0],message:'Dépense soumise pour validation.'},201,cors);
+   return jsonResponse({ok:true,entry:result.data?.[0],message:'Dépense enregistrée et déduite immédiatement du portefeuille.'},201,cors);
   }
   if(req.method==='PATCH') {
    if(!admin) return errorResponse('ADMIN_REQUIRED','Accès réservé aux administrateurs actifs.',403,cors); const body=await req.json().catch(()=>null); const id=String(body?.entryId||''),status=String(body?.status||'');
