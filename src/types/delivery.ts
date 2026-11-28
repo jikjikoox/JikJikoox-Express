@@ -33,7 +33,8 @@ export type AppTab =
   | 'drivers'
   | 'history'
   | 'notifications'
-  | 'profile';
+  | 'profile'
+  | 'finance';
 
 export interface MissionItem {
   name: string;
