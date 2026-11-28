@@ -96,6 +96,30 @@ export async function handleAdminDriversRequest(req: Request): Promise<Response>
         );
       }
 
+      if (accountStatus === 'active') {
+        const candidate = await supabaseRest<Array<{
+          verification_status: string;
+          engagement_status: string;
+          insurance_expires_at: string | null;
+          identity_verified_at: string | null;
+          address_verified_at: string | null;
+        }>>(env, `/rest/v1/express_drivers?id=eq.${encodeURIComponent(driverId)}&select=verification_status,engagement_status,insurance_expires_at,identity_verified_at,address_verified_at`);
+        const record = candidate.data?.[0];
+        if (!candidate.ok || !record) {
+          return errorResponse('DRIVER_NOT_FOUND', 'Livreur introuvable.', 404, cors);
+        }
+        if (record.verification_status !== 'verified' || record.engagement_status !== 'accepted' ||
+            !record.identity_verified_at || !record.address_verified_at ||
+            !record.insurance_expires_at || record.insurance_expires_at < new Date().toISOString().slice(0, 10)) {
+          return errorResponse(
+            'TRUST_CHECKS_REQUIRED',
+            'Activation refusée : identité, adresse, documents, assurance et engagement doivent être vérifiés et approuvés.',
+            409,
+            cors
+          );
+        }
+      }
+
       const patchPayload: Record<string, unknown> = {
         account_status: accountStatus,
         updated_at: new Date().toISOString(),
