@@ -1,13 +1,13 @@
 import { buildCorsHeaders, jsonResponse, errorResponse } from '../_shared/corsAndResponse.ts';
 import { extractBearerToken, verifyFirebaseIdToken } from '../_shared/firebaseAuth.ts';
-import { readDenoEnv, supabaseRest, fetchDriverByFirebaseUid, assertAuthorizedActiveDriver, fetchActiveAdminByFirebaseUid, assertAuthorizedAdmin } from '../_shared/supabaseAdmin.ts';
+import { readDenoEnv, supabaseRest, fetchDriverByFirebaseUid, assertAuthorizedActiveDriver } from '../_shared/supabaseAdmin.ts';
 const EXPENSE_CATEGORIES = ['fuel','oil_change','maintenance','cleaning','food','telecom','other'];
 Deno.serve(async (req:Request) => {
  const env=readDenoEnv(); const cors=buildCorsHeaders(req.headers.get('origin'),env.allowedOrigins);
  if(req.method==='OPTIONS') return new Response('ok',{headers:cors});
  try {
   const token=extractBearerToken(req.headers.get('authorization')); const user=await verifyFirebaseIdToken(token,{projectId:env.firebaseProjectId});
-  const driver=await fetchDriverByFirebaseUid(env,user.uid); const isAdmin=await fetchActiveAdminByFirebaseUid(env,user.uid,user.email);
+  const driver=await fetchDriverByFirebaseUid(env,user.uid);\n  const adminLookup=await supabaseRest<any[]>(env,'/rest/v1/express_admins?firebase_uid=eq.'+encodeURIComponent(user.uid)+'&is_active=eq.true&select=firebase_uid,email,is_active&limit=1');\n  const admin=adminLookup.ok&&adminLookup.data?.length===1&&String(adminLookup.data[0].email||'').toLowerCase()===user.email.toLowerCase()?adminLookup.data[0]:null;
   if(req.method==='GET') {
    if(driver) { const authorized=assertAuthorizedActiveDriver(driver);
     const rows=await supabaseRest<any[]>(env,'/rest/v1/express_driver_financial_entries?driver_id=eq.'+authorized.id+'&select=*&order=created_at.desc&limit=200');
@@ -18,7 +18,7 @@ Deno.serve(async (req:Request) => {
     const pending=sum(entries.filter(e=>e.entry_type==='expense'&&e.status==='pending'));
     return jsonResponse({ok:true,summary:{earnedXof:earned,approvedExpensesXof:approved,pendingExpensesXof:pending,estimatedNetXof:earned-approved},entries},200,cors);
    }
-   const admin=assertAuthorizedAdmin(isAdmin); const rows=await supabaseRest<any[]>(env,'/rest/v1/express_driver_financial_entries?select=*&order=created_at.desc&limit=500');
+   if(!admin) return errorResponse('ADMIN_REQUIRED','Accès réservé aux administrateurs actifs.',403,cors); const rows=await supabaseRest<any[]>(env,'/rest/v1/express_driver_financial_entries?select=*&order=created_at.desc&limit=500');
    if(!rows.ok) throw new Error('FINANCE_READ_FAILED'); return jsonResponse({ok:true,adminRole:admin.role,entries:rows.data||[]},200,cors);
   }
   if(req.method==='POST') {
@@ -32,11 +32,11 @@ Deno.serve(async (req:Request) => {
    return jsonResponse({ok:true,entry:result.data?.[0],message:'Dépense soumise pour validation.'},201,cors);
   }
   if(req.method==='PATCH') {
-   const admin=assertAuthorizedAdmin(isAdmin); const body=await req.json().catch(()=>null); const id=String(body?.entryId||''),status=String(body?.status||'');
+   if(!admin) return errorResponse('ADMIN_REQUIRED','Accès réservé aux administrateurs actifs.',403,cors); const body=await req.json().catch(()=>null); const id=String(body?.entryId||''),status=String(body?.status||'');
    if(!id||!['approved','rejected','posted'].includes(status)) return errorResponse('INVALID_REVIEW','Révision invalide.',400,cors);
    const result=await supabaseRest<any[]>(env,'/rest/v1/express_driver_financial_entries?id=eq.'+encodeURIComponent(id)+'&entry_type=eq.expense&status=eq.pending&select=id,status,reviewed_at',{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({status,reviewed_by_firebase_uid:user.uid,reviewed_at:new Date().toISOString(),posted_at:status==='posted'?new Date().toISOString():null})});
    if(!result.ok) throw new Error('FINANCE_REVIEW_FAILED'); if(!result.data?.length) return errorResponse('ENTRY_NOT_PENDING','Mouvement introuvable ou déjà traité.',409,cors);
-   return jsonResponse({ok:true,entry:result.data[0],reviewerRole:admin.role},200,cors);
+   return jsonResponse({ok:true,entry:result.data[0],reviewerEmail:admin.email},200,cors);
   }
   return errorResponse('METHOD_NOT_ALLOWED','Méthode non autorisée.',405,cors);
  } catch(e) { const message=e instanceof Error?e.message:'UNKNOWN'; const status=message.includes('TOKEN')||message.includes('EMAIL')?401:message.includes('DRIVER_')||message.includes('ADMIN_')?403:500; return errorResponse('FINANCE_ERROR',status===500?'Une erreur est survenue dans le module financier.':message,status,cors); }
