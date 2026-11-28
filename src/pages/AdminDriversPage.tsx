@@ -16,6 +16,7 @@ import { useCourierApp } from '../context/CourierAppContext';
 import { VEHICLE_LABELS } from '../lib/missionWorkflow';
 import type { AdminDriverRow } from '../lib/supabaseContract';
 import { expressApi, ExpressApiError } from '../services/expressApi';
+import { getSupabaseFunctionsBaseUrl } from '../lib/supabaseContract';
 import type { AccountStatus } from '../types/delivery';
 
 type FilterTab = 'all' | AccountStatus;
@@ -97,11 +98,66 @@ export function AdminDriversPage() {
   const [loading, setLoading] = useState(true);
   const [busyDriverId, setBusyDriverId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [trustCase, setTrustCase] = useState<{ driverId: string; documents: Array<Record<string, unknown>>; driver: Record<string, unknown> } | null>(null);
+  const [trustBusy, setTrustBusy] = useState(false);
+  const [identityConfirmed, setIdentityConfirmed] = useState(false);
+  const [addressConfirmed, setAddressConfirmed] = useState(false);
+  const [engagementAccepted, setEngagementAccepted] = useState(false);
 
   const canAccess = isAdminUser || mode === 'demo';
 
   const loadDrivers = useCallback(async () => {
-    if (!canAccess) {
+    const trustRequest = async (driverId: string, body?: Record<string, unknown>) => {
+    if (!firebaseUser) throw new Error('Session administrateur absente.');
+    const token = await firebaseUser.getIdToken();
+    const base = getSupabaseFunctionsBaseUrl().replace(/\\/+$/, '');
+    const response = await fetch(body ? `${base}/courier-trust` : `${base}/courier-trust?driverId=${encodeURIComponent(driverId)}`, {
+      method: body ? 'POST' : 'GET',
+      headers: { Authorization: `Bearer ${token}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+      body: body ? JSON.stringify({ ...body, driverId }) : undefined,
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.ok) throw new Error(payload?.error?.message || 'Opération dossier confiance impossible.');
+    return payload;
+  };
+
+  const openTrustCase = async (driverId: string) => {
+    setTrustBusy(true);
+    try {
+      const result = await trustRequest(driverId);
+      setTrustCase({ driverId, driver: result.driver, documents: result.documents || [] });
+      setIdentityConfirmed(false); setAddressConfirmed(false); setEngagementAccepted(false);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Impossible de consulter le dossier.', 'red');
+    } finally { setTrustBusy(false); }
+  };
+
+  const reviewTrustDocument = async (documentId: string, reviewStatus: 'approved' | 'rejected' | 'replacement_required') => {
+    if (!trustCase) return;
+    setTrustBusy(true);
+    try {
+      await trustRequest(trustCase.driverId, { action: 'review-document', documentId, reviewStatus });
+      await openTrustCase(trustCase.driverId);
+      showToast('Décision documentaire enregistrée.', 'green');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Validation documentaire impossible.', 'red');
+    } finally { setTrustBusy(false); }
+  };
+
+  const approveTrustCase = async () => {
+    if (!trustCase) return;
+    setTrustBusy(true);
+    try {
+      await trustRequest(trustCase.driverId, { action: 'approve-application', identityConfirmed, addressConfirmed, engagementAccepted });
+      showToast('Dossier confiance approuvé. Vous pouvez maintenant activer le livreur.', 'green');
+      await openTrustCase(trustCase.driverId);
+      await loadDrivers();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Validation du dossier impossible.', 'red');
+    } finally { setTrustBusy(false); }
+  };
+
+  if (!canAccess) {
       setLoading(false);
       return;
     }
@@ -366,6 +422,12 @@ export function AdminDriversPage() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  {driver.account_status === 'pending' && (
+                    <button type="button" disabled={trustBusy} onClick={() => void openTrustCase(driver.id)}
+                      className="min-h-[42px] px-3.5 rounded-xl border border-[#0E6E2D]/30 bg-[#ECF7EE] text-[#0E6E2D] text-xs font-semibold">
+                      <ShieldAlert className="mr-1 inline h-4 w-4"/>Dossier confiance
+                    </button>
+                  )}
                   {driver.account_status !== 'active' && (
                     <button
                       type="button"
@@ -406,6 +468,38 @@ export function AdminDriversPage() {
                     </button>
                   )}
                 </div>
+                {trustCase?.driverId === driver.id && (
+                  <section className="mt-4 w-full rounded-xl border border-[#D6D1C4] bg-[#FAF9F6] p-4 space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="font-bold text-sm">Dossier de confiance — pièces justificatives</h3>
+                      <button type="button" onClick={() => setTrustCase(null)} className="text-xs underline">Fermer</button>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {trustCase.documents.map((doc) => (
+                        <div key={String(doc.id)} className="rounded-lg border border-[#E5E2D9] bg-white p-3 text-xs space-y-2">
+                          <p className="font-semibold">{String(doc.document_type).replaceAll('_',' ')}</p>
+                          <p className="text-[#77736A]">État : {String(doc.review_status)}</p>
+                          {typeof doc.signedUrl === 'string' && <a className="text-[#0E6E2D] underline" href={doc.signedUrl} target="_blank" rel="noreferrer">Consulter le document (lien temporaire)</a>}
+                          <div className="flex flex-wrap gap-2">
+                            <button disabled={trustBusy} onClick={() => void reviewTrustDocument(String(doc.id),'approved')} className="rounded-lg bg-[#0E6E2D] px-2 py-1 text-white">Approuver</button>
+                            <button disabled={trustBusy} onClick={() => void reviewTrustDocument(String(doc.id),'rejected')} className="rounded-lg bg-red-50 px-2 py-1 text-red-700">Refuser</button>
+                            <button disabled={trustBusy} onClick={() => void reviewTrustDocument(String(doc.id),'replacement_required')} className="rounded-lg bg-amber-50 px-2 py-1 text-amber-800">Remplacement</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="space-y-2 border-t border-[#E5E2D9] pt-3 text-xs">
+                      <label className="flex gap-2"><input type="checkbox" checked={identityConfirmed} onChange={e=>setIdentityConfirmed(e.target.checked)}/>Identité et pièces originales contrôlées.</label>
+                      <label className="flex gap-2"><input type="checkbox" checked={addressConfirmed} onChange={e=>setAddressConfirmed(e.target.checked)}/>Adresse du candidat vérifiée.</label>
+                      <label className="flex gap-2"><input type="checkbox" checked={engagementAccepted} onChange={e=>setEngagementAccepted(e.target.checked)}/>Conditions d'engagement présentées et acceptées.</label>
+                      <button type="button" disabled={trustBusy || !identityConfirmed || !addressConfirmed || !engagementAccepted}
+                        onClick={() => void approveTrustCase()}
+                        className="w-full rounded-xl bg-[#0E6E2D] px-4 py-3 font-semibold text-white disabled:opacity-50">
+                        {trustBusy ? 'Vérification…' : 'Valider le dossier de confiance'}
+                      </button>
+                    </div>
+                  </section>
+                )}
               </article>
             );
           })}
